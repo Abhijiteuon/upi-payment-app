@@ -59,7 +59,7 @@ function App() {
           {!isSubmitted ? (
             <div className="fade-in">
               <div className="header">
-                <h1>Secure Payment</h1>
+                <h1>Pay Abhijit Securely</h1>
                 <p>Complete your payment details securely</p>
               </div>
 
