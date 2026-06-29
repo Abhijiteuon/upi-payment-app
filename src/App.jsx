@@ -170,7 +170,7 @@ function App() {
               
               <div className="qr-box" style={{ overflow: 'hidden', padding: '10px', background: 'white' }}>
                 <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`upi://pay?pa=euonabhijit@okicici&pn=Abhijit Kumar&am=${formData.amount}&cu=INR&tn=${formData.purpose}`)}`} 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`upi://pay?pa=euonabhijit@okicici&pn=Abhijit%20Kumar&am=${formData.amount}&cu=INR&tn=${encodeURIComponent(formData.purpose)}`)}`} 
                   alt="UPI QR Code" 
                   style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 />
