@@ -71,6 +71,25 @@ export const saveTransactions = (transactions) => {
 // GOOGLE SHEET / APPS SCRIPT SYNC PARSER
 // =========================================================================
 
+// Robust Google Date format parser (handles Date(year,month,day,hour,min,sec) and standard strings)
+function parseGoogleDate(val) {
+  if (!val) return new Date().toISOString();
+  try {
+    if (typeof val === 'string' && val.startsWith('Date(') && val.endsWith(')')) {
+      const parts = val.substring(5, val.length - 1).split(',').map(Number);
+      if (parts.length >= 3) {
+        // parts: [year, month, day, hours, minutes, seconds]
+        const d = new Date(parts[0], parts[1] || 0, parts[2] || 1, parts[3] || 0, parts[4] || 0, parts[5] || 0);
+        return !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+      }
+    }
+    const d = new Date(val);
+    return !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
 // Parses Google GViz JSON output directly from any shared Google Sheet
 function parseGVizData(data) {
   if (!data || !data.table || !Array.isArray(data.table.rows)) return [];
@@ -131,7 +150,7 @@ function parseGVizData(data) {
         amount: amount || '0.00',
         utr,
         status: (status === 'successful' || status === 'failed') ? status : 'pending',
-        createdAt: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
+        createdAt: parseGoogleDate(timestamp),
         verifiedAt: status === 'successful' ? new Date().toISOString() : null,
         notes
       });
