@@ -6,7 +6,11 @@ const SHEET_URL_KEY = 'upi_sheet_url';
 export const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1zfpeMPKzwkTGeGsGRI69ya6NW6y_N7NFsa3QQY1XIh8/edit?gid=450698937';
 
 export const getSheetUrl = () => {
-  return localStorage.getItem(SHEET_URL_KEY) || DEFAULT_SHEET_URL;
+  const stored = localStorage.getItem(SHEET_URL_KEY);
+  if (!stored || (!stored.includes('docs.google.com') && !stored.includes('script.google.com'))) {
+    return DEFAULT_SHEET_URL;
+  }
+  return stored.trim();
 };
 
 export const setSheetUrl = (url) => {
@@ -134,6 +138,7 @@ function parseGVizData(data) {
     const phone = getVal(/phone|mobile/i);
     const email = getVal(/email/i);
     const purpose = getVal(/purpose/i);
+    const source = getVal(/source/i);
     const rawStatus = getVal(/payment\s*status|^status$/i).toLowerCase();
     let status = 'pending';
     if (/success|verif|approv|complet/i.test(rawStatus)) {
@@ -155,9 +160,9 @@ function parseGVizData(data) {
         amount: (amount || '0.00').trim(),
         utr: (utr || '').trim(),
         status,
-        createdAt: parseGoogleDate(timestamp),
+        createdAt: parseGoogleDate(getVal(/timestamp|date/i)),
         verifiedAt: status === 'successful' ? new Date().toISOString() : null,
-        notes: (notes || '').trim()
+        notes: (getVal(/notes|reason/i) || '').trim()
       });
     }
   }
@@ -170,13 +175,9 @@ export const fetchRemoteTransactions = async () => {
   const configuredUrl = getSheetUrl();
   const localList = getTransactions();
 
-  if (!configuredUrl) {
-    return { success: true, source: 'local', transactions: localList };
-  }
-
   try {
     // 1. Check if URL is an Apps Script Web App
-    if (configuredUrl.includes('script.google.com')) {
+    if (configuredUrl && configuredUrl.includes('script.google.com')) {
       const res = await fetch(`${configuredUrl}?action=getTransactions&t=${Date.now()}`);
       const data = await res.json();
       if (data && data.success && Array.isArray(data.transactions)) {
@@ -185,14 +186,15 @@ export const fetchRemoteTransactions = async () => {
       }
     } 
     // 2. Check if URL is a Google Spreadsheet Link
-    else if (configuredUrl.includes('spreadsheets/d/')) {
-      const match = configuredUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    else {
+      const urlToUse = configuredUrl || DEFAULT_SHEET_URL;
+      const match = urlToUse.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
       if (match && match[1]) {
         const sheetId = match[1];
         
         // Extract gid if present
         let gid = '';
-        const gidMatch = configuredUrl.match(/gid=([0-9]+)/);
+        const gidMatch = urlToUse.match(/gid=([0-9]+)/);
         if (gidMatch && gidMatch[1]) {
           gid = gidMatch[1];
         }
@@ -267,20 +269,41 @@ export const getTransactionById = (verificationId) => {
   if (!verificationId) return null;
   const transactions = getTransactions();
   const query = verificationId.trim().toUpperCase();
-  return transactions.find(t => (t.verificationId || '').toUpperCase() === query) || null;
+  return transactions.find(t => (t.verificationId || '').trim().toUpperCase() === query) || null;
 };
 
 export const fetchRemoteStatusById = async (verificationId) => {
   const query = (verificationId || '').trim().toUpperCase();
   if (!query) return null;
 
-  // Pull latest from remote
-  const result = await fetchRemoteTransactions();
-  if (result && Array.isArray(result.transactions)) {
-    const match = result.transactions.find(t => (t.verificationId || '').toUpperCase() === query);
-    if (match) return match;
+  // 1. Pull latest from remote
+  try {
+    const result = await fetchRemoteTransactions();
+    if (result && Array.isArray(result.transactions) && result.transactions.length > 0) {
+      const match = result.transactions.find(t => (t.verificationId || '').trim().toUpperCase() === query);
+      if (match) return match;
+    }
+  } catch (err) {
+    console.warn('fetchRemoteTransactions error in fetchRemoteStatusById:', err);
   }
 
+  // 2. Direct hard fallback to Google Sheet GViz API
+  try {
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/1zfpeMPKzwkTGeGsGRI69ya6NW6y_N7NFsa3QQY1XIh8/gviz/tq?tqx=out:json&gid=450698937&t=${Date.now()}`;
+    const res = await fetch(gvizUrl);
+    const text = await res.text();
+    if (!text.includes('<!DOCTYPE') && text.includes('{')) {
+      const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+      const data = JSON.parse(jsonStr);
+      const parsedTxs = parseGVizData(data);
+      const match = parsedTxs.find(t => (t.verificationId || '').trim().toUpperCase() === query);
+      if (match) return match;
+    }
+  } catch (err) {
+    console.warn('Direct GViz fallback error:', err);
+  }
+
+  // 3. Fallback to local storage cache
   return getTransactionById(query);
 };
 
@@ -289,7 +312,7 @@ export const updateRemoteStatus = async (verificationId, status, notes = '', utr
   const query = (verificationId || '').trim().toUpperCase();
 
   const updated = localList.map(t => {
-    if ((t.verificationId || '').toUpperCase() === query) {
+    if ((t.verificationId || '').trim().toUpperCase() === query) {
       return {
         ...t,
         status,
@@ -326,7 +349,7 @@ export const updateTransactionStatus = updateRemoteStatus;
 export const deleteTransaction = (verificationId) => {
   const query = (verificationId || '').trim().toUpperCase();
   const transactions = getTransactions();
-  const updated = transactions.filter(t => (t.verificationId || '').toUpperCase() !== query);
+  const updated = transactions.filter(t => (t.verificationId || '').trim().toUpperCase() !== query);
   saveTransactions(updated);
   return updated;
 };
