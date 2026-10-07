@@ -176,11 +176,16 @@ function AdminDashboard({ onLogout }) {
       {/* Top Banner */}
       <div className="admin-header-row">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
             <span className="admin-badge">ADMIN CONTROL PANEL</span>
-            <span className={`sync-status-badge ${hasSheetUrl ? 'online' : 'offline'}`}>
-              {hasSheetUrl ? '🟢 Google Sheet Live Sync' : '🟡 Local Storage Mode'}
+            <span className="sync-status-badge online">
+              🟢 Cloud Sync Active (Live)
             </span>
+            {hasSheetUrl && (
+              <span className="sync-status-badge online" style={{ background: 'rgba(99, 102, 241, 0.2)', color: '#c7d2fe' }}>
+                📊 Google Sheet Connected
+              </span>
+            )}
           </div>
           <h1 className="admin-title">Payment Verification Dashboard</h1>
           <p className="admin-subtitle">Logged in as: <strong>Abhijit Kumar (Gopu)</strong></p>
@@ -189,11 +194,11 @@ function AdminDashboard({ onLogout }) {
         <div className="admin-top-actions">
           <button 
             onClick={() => loadData(true)} 
-            className="btn-action-secondary"
+            className="btn-action-primary"
             disabled={isLoading}
-            title="Fetch latest responses from Google Sheet"
+            title="Fetch latest responses from Cloud Database & Google Sheet"
           >
-            {isLoading ? '⏳ Refreshing...' : '🔄 Sync Sheet'}
+            {isLoading ? '⏳ Refreshing...' : '🔄 Refresh Data'}
           </button>
           <button 
             onClick={() => {
@@ -201,11 +206,11 @@ function AdminDashboard({ onLogout }) {
               setShowSettingsModal(true);
             }} 
             className="btn-action-secondary"
-            title="Configure Google Sheet API connection"
+            title="Optional: Link directly to Google Sheets Web App"
           >
             ⚙️ Sheet Setup
           </button>
-          <button onClick={() => setShowAddModal(true)} className="btn-action-primary">
+          <button onClick={() => setShowAddModal(true)} className="btn-action-secondary">
             + New
           </button>
           <button onClick={handleExportData} className="btn-action-secondary">
@@ -223,13 +228,13 @@ function AdminDashboard({ onLogout }) {
         </div>
       )}
 
-      {/* Sync Help Alert if no URL configured */}
+      {/* Optional Sheet Sync Tip if not connected */}
       {!hasSheetUrl && (
         <div className="sheet-setup-notice fade-in">
           <div className="notice-icon">💡</div>
           <div className="notice-body">
-            <strong>Connect Live Google Sheet Sync:</strong>
-            <p>To automatically pull responses submitted by users on other devices, connect your Google Sheet Apps Script Web App URL.</p>
+            <strong>Optional Google Sheet Direct Link:</strong>
+            <p>Cloud sync is active across all devices. If you also want direct 2-way sync with your Google Sheet, you can add your Apps Script URL anytime.</p>
             <button 
               className="btn-setup-link" 
               onClick={() => {
@@ -237,7 +242,7 @@ function AdminDashboard({ onLogout }) {
                 setShowSettingsModal(true);
               }}
             >
-              Click here to set up Google Sheet Sync (1 min setup) →
+              Configure Google Sheet URL (Optional) →
             </button>
           </div>
         </div>

@@ -2,11 +2,12 @@ const STORAGE_KEY = 'upi_payment_transactions';
 const ADMIN_SESSION_KEY = 'upi_admin_session';
 const APPS_SCRIPT_URL_KEY = 'upi_apps_script_url';
 
-// Default Apps Script URL placeholder (can be updated by Admin in the dashboard)
-const DEFAULT_APPS_SCRIPT_URL = '';
+// Primary Automated Cloud Database Store for Cross-Device Synchronization
+const CLOUD_STORE_ID = 'ff808181a09d98f701a117f4495e19a8';
+const CLOUD_API_URL = `https://api.restful-api.dev/objects/${CLOUD_STORE_ID}`;
 
 export const getAppsScriptUrl = () => {
-  return localStorage.getItem(APPS_SCRIPT_URL_KEY) || DEFAULT_APPS_SCRIPT_URL;
+  return localStorage.getItem(APPS_SCRIPT_URL_KEY) || '';
 };
 
 export const setAppsScriptUrl = (url) => {
@@ -23,7 +24,7 @@ export const generateVerificationId = () => {
   return result;
 };
 
-// Default seed data for initial testing if storage is empty
+// Initial Seed Data
 const INITIAL_TRANSACTIONS = [
   {
     verificationId: 'VER-SAMPLE1',
@@ -63,8 +64,67 @@ export const saveTransactions = (transactions) => {
   }
 };
 
+// =========================================================================
+// AUTOMATED CLOUD SYNC ENGINE (CROSS-DEVICE REAL-TIME)
+// =========================================================================
+
+// Sync helper to save array to Cloud Database
+const syncToCloud = async (transactions) => {
+  try {
+    const res = await fetch(CLOUD_API_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'ABHIJIT_UPI_TRANSACTIONS_STORE',
+        data: {
+          transactions,
+          lastUpdated: new Date().toISOString()
+        }
+      })
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('Cloud sync background warning:', err);
+    return false;
+  }
+};
+
+export const fetchRemoteTransactions = async () => {
+  // 1. Try Custom Google Apps Script if user configured one
+  const scriptUrl = getAppsScriptUrl();
+  if (scriptUrl) {
+    try {
+      const res = await fetch(`${scriptUrl}?action=getTransactions&t=${Date.now()}`);
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.transactions)) {
+        saveTransactions(data.transactions);
+        return { success: true, source: 'apps_script', transactions: data.transactions };
+      }
+    } catch (err) {
+      console.warn('Google Apps script fetch error, falling back to cloud sync', err);
+    }
+  }
+
+  // 2. Fetch from Automated Cloud Database
+  try {
+    const res = await fetch(`${CLOUD_API_URL}?t=${Date.now()}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.data && Array.isArray(data.data.transactions)) {
+        const cloudList = data.data.transactions;
+        saveTransactions(cloudList);
+        return { success: true, source: 'cloud_db', transactions: cloudList };
+      }
+    }
+  } catch (err) {
+    console.warn('Cloud DB fetch error', err);
+  }
+
+  return { success: false, source: 'local', transactions: getTransactions() };
+};
+
 export const addTransaction = (formData) => {
-  const transactions = getTransactions();
+  const localList = getTransactions();
   const verificationId = generateVerificationId();
   const newTx = {
     verificationId,
@@ -81,8 +141,29 @@ export const addTransaction = (formData) => {
     notes: ''
   };
 
-  const updated = [newTx, ...transactions];
+  const updated = [newTx, ...localList];
   saveTransactions(updated);
+
+  // Asynchronously push to Cloud Database so Admin instantly sees it
+  (async () => {
+    try {
+      // Pull latest first to avoid overwriting concurrent transactions
+      const res = await fetch(`${CLOUD_API_URL}?t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        const existing = (data && data.data && Array.isArray(data.data.transactions)) ? data.data.transactions : [];
+        const merged = [newTx, ...existing.filter(e => e.verificationId !== newTx.verificationId)];
+        await syncToCloud(merged);
+        saveTransactions(merged);
+      } else {
+        await syncToCloud(updated);
+      }
+    } catch (err) {
+      console.warn('Background addTransaction cloud sync error', err);
+      syncToCloud(updated);
+    }
+  })();
+
   return newTx;
 };
 
@@ -90,121 +171,71 @@ export const getTransactionById = (verificationId) => {
   if (!verificationId) return null;
   const transactions = getTransactions();
   const query = verificationId.trim().toUpperCase();
-  return transactions.find(t => t.verificationId.toUpperCase() === query) || null;
+  return transactions.find(t => (t.verificationId || '').toUpperCase() === query) || null;
 };
 
-export const updateTransactionStatus = (verificationId, status, notes = '') => {
-  const transactions = getTransactions();
-  const updated = transactions.map(t => {
-    if (t.verificationId.toUpperCase() === verificationId.toUpperCase()) {
+export const fetchRemoteStatusById = async (verificationId) => {
+  const query = (verificationId || '').trim().toUpperCase();
+  if (!query) return null;
+
+  // Query live cloud transactions
+  const result = await fetchRemoteTransactions();
+  if (result && Array.isArray(result.transactions)) {
+    const match = result.transactions.find(t => (t.verificationId || '').toUpperCase() === query);
+    if (match) return match;
+  }
+
+  return getTransactionById(query);
+};
+
+export const updateRemoteStatus = async (verificationId, status, notes = '') => {
+  const localList = getTransactions();
+  const query = (verificationId || '').trim().toUpperCase();
+
+  const updated = localList.map(t => {
+    if ((t.verificationId || '').toUpperCase() === query) {
       return {
         ...t,
         status,
         verifiedAt: status !== 'pending' ? new Date().toISOString() : null,
-        notes: notes || t.notes
+        notes: notes !== undefined ? notes : t.notes
       };
     }
     return t;
   });
+
   saveTransactions(updated);
-  return updated;
+
+  // Sync to Cloud Store
+  await syncToCloud(updated);
+
+  // Also sync to Apps Script if configured
+  const scriptUrl = getAppsScriptUrl();
+  if (scriptUrl) {
+    try {
+      fetch(scriptUrl, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'updateStatus', verificationId: query, status, notes })
+      }).catch(e => console.warn('Apps script post warning', e));
+    } catch (e) {
+      console.warn('Apps script post error', e);
+    }
+  }
+
+  return { success: true, transactions: updated };
 };
+
+export const updateTransactionStatus = updateRemoteStatus;
 
 export const deleteTransaction = (verificationId) => {
-  const transactions = getTransactions();
-  const updated = transactions.filter(t => t.verificationId.toUpperCase() !== verificationId.toUpperCase());
-  saveTransactions(updated);
-  return updated;
-};
-
-// =========================================================================
-// LIVE GOOGLE APPS SCRIPT / SHEETS SYNC
-// =========================================================================
-
-export const fetchRemoteTransactions = async () => {
-  const scriptUrl = getAppsScriptUrl();
-  if (!scriptUrl) {
-    return { success: false, error: 'NO_URL', transactions: getTransactions() };
-  }
-
-  try {
-    const res = await fetch(`${scriptUrl}?action=getTransactions&t=${Date.now()}`);
-    const data = await res.json();
-    if (data && data.success && Array.isArray(data.transactions)) {
-      // Merge remote with local transactions (remote takes precedence)
-      const remoteTxs = data.transactions;
-      saveTransactions(remoteTxs);
-      return { success: true, transactions: remoteTxs };
-    }
-    return { success: false, error: 'INVALID_DATA', transactions: getTransactions() };
-  } catch (err) {
-    console.error('Error fetching remote transactions from Google Sheet', err);
-    return { success: false, error: err.message, transactions: getTransactions() };
-  }
-};
-
-export const fetchRemoteStatusById = async (verificationId) => {
-  const scriptUrl = getAppsScriptUrl();
   const query = (verificationId || '').trim().toUpperCase();
-  
-  if (!scriptUrl) {
-    return getTransactionById(query);
-  }
-
-  try {
-    const res = await fetch(`${scriptUrl}?action=getTransactions&t=${Date.now()}`);
-    const data = await res.json();
-    if (data && data.success && Array.isArray(data.transactions)) {
-      const match = data.transactions.find(t => (t.verificationId || '').toUpperCase() === query);
-      if (match) {
-        // Update local cache
-        const local = getTransactions();
-        const existingIdx = local.findIndex(l => (l.verificationId || '').toUpperCase() === query);
-        if (existingIdx !== -1) {
-          local[existingIdx] = match;
-        } else {
-          local.unshift(match);
-        }
-        saveTransactions(local);
-        return match;
-      }
-    }
-    return getTransactionById(query);
-  } catch (err) {
-    console.error('Error querying live status from Google Sheet', err);
-    return getTransactionById(query);
-  }
-};
-
-export const updateRemoteStatus = async (verificationId, status, notes = '') => {
-  // Update local immediately for instant UI responsiveness
-  const localUpdated = updateTransactionStatus(verificationId, status, notes);
-
-  const scriptUrl = getAppsScriptUrl();
-  if (!scriptUrl) {
-    return { success: true, localOnly: true, transactions: localUpdated };
-  }
-
-  try {
-    const res = await fetch(scriptUrl, {
-      method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify({
-        action: 'updateStatus',
-        verificationId,
-        status,
-        notes
-      })
-    });
-    const data = await res.json();
-    return { success: data.success, transactions: localUpdated };
-  } catch (err) {
-    console.error('Error updating status on Google Sheet', err);
-    return { success: false, error: err.message, transactions: localUpdated };
-  }
+  const transactions = getTransactions();
+  const updated = transactions.filter(t => (t.verificationId || '').toUpperCase() !== query);
+  saveTransactions(updated);
+  syncToCloud(updated);
+  return updated;
 };
 
 // =========================================================================
