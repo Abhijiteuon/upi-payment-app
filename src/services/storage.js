@@ -1,5 +1,17 @@
 const STORAGE_KEY = 'upi_payment_transactions';
 const ADMIN_SESSION_KEY = 'upi_admin_session';
+const APPS_SCRIPT_URL_KEY = 'upi_apps_script_url';
+
+// Default Apps Script URL placeholder (can be updated by Admin in the dashboard)
+const DEFAULT_APPS_SCRIPT_URL = '';
+
+export const getAppsScriptUrl = () => {
+  return localStorage.getItem(APPS_SCRIPT_URL_KEY) || DEFAULT_APPS_SCRIPT_URL;
+};
+
+export const setAppsScriptUrl = (url) => {
+  localStorage.setItem(APPS_SCRIPT_URL_KEY, (url || '').trim());
+};
 
 // Helper to generate a unique Verification ID (e.g., VER-8F2K9M)
 export const generateVerificationId = () => {
@@ -22,24 +34,10 @@ const INITIAL_TRANSACTIONS = [
     source: 'Individual',
     amount: '2500.00',
     utr: '410293847561',
-    status: 'successful', // 'pending' | 'successful' | 'failed'
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(), // 1 day ago
+    status: 'successful',
+    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
     verifiedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
     notes: 'Verified via ICICI statement'
-  },
-  {
-    verificationId: 'VER-SAMPLE2',
-    name: 'Priya Verma',
-    email: 'priya.v@example.com',
-    phone: '9812345678',
-    purpose: 'Education-venture payment',
-    source: 'Private',
-    amount: '1200.00',
-    utr: '419827364510',
-    status: 'pending',
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(), // 4 hours ago
-    verifiedAt: null,
-    notes: ''
   }
 ];
 
@@ -77,7 +75,7 @@ export const addTransaction = (formData) => {
     source: formData.source || '',
     amount: formData.amount || '0.00',
     utr: formData.utr || '',
-    status: 'pending', // Pending by default
+    status: 'pending',
     createdAt: new Date().toISOString(),
     verifiedAt: null,
     notes: ''
@@ -119,7 +117,100 @@ export const deleteTransaction = (verificationId) => {
   return updated;
 };
 
-// Admin authentication verification
+// =========================================================================
+// LIVE GOOGLE APPS SCRIPT / SHEETS SYNC
+// =========================================================================
+
+export const fetchRemoteTransactions = async () => {
+  const scriptUrl = getAppsScriptUrl();
+  if (!scriptUrl) {
+    return { success: false, error: 'NO_URL', transactions: getTransactions() };
+  }
+
+  try {
+    const res = await fetch(`${scriptUrl}?action=getTransactions&t=${Date.now()}`);
+    const data = await res.json();
+    if (data && data.success && Array.isArray(data.transactions)) {
+      // Merge remote with local transactions (remote takes precedence)
+      const remoteTxs = data.transactions;
+      saveTransactions(remoteTxs);
+      return { success: true, transactions: remoteTxs };
+    }
+    return { success: false, error: 'INVALID_DATA', transactions: getTransactions() };
+  } catch (err) {
+    console.error('Error fetching remote transactions from Google Sheet', err);
+    return { success: false, error: err.message, transactions: getTransactions() };
+  }
+};
+
+export const fetchRemoteStatusById = async (verificationId) => {
+  const scriptUrl = getAppsScriptUrl();
+  const query = (verificationId || '').trim().toUpperCase();
+  
+  if (!scriptUrl) {
+    return getTransactionById(query);
+  }
+
+  try {
+    const res = await fetch(`${scriptUrl}?action=getTransactions&t=${Date.now()}`);
+    const data = await res.json();
+    if (data && data.success && Array.isArray(data.transactions)) {
+      const match = data.transactions.find(t => (t.verificationId || '').toUpperCase() === query);
+      if (match) {
+        // Update local cache
+        const local = getTransactions();
+        const existingIdx = local.findIndex(l => (l.verificationId || '').toUpperCase() === query);
+        if (existingIdx !== -1) {
+          local[existingIdx] = match;
+        } else {
+          local.unshift(match);
+        }
+        saveTransactions(local);
+        return match;
+      }
+    }
+    return getTransactionById(query);
+  } catch (err) {
+    console.error('Error querying live status from Google Sheet', err);
+    return getTransactionById(query);
+  }
+};
+
+export const updateRemoteStatus = async (verificationId, status, notes = '') => {
+  // Update local immediately for instant UI responsiveness
+  const localUpdated = updateTransactionStatus(verificationId, status, notes);
+
+  const scriptUrl = getAppsScriptUrl();
+  if (!scriptUrl) {
+    return { success: true, localOnly: true, transactions: localUpdated };
+  }
+
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify({
+        action: 'updateStatus',
+        verificationId,
+        status,
+        notes
+      })
+    });
+    const data = await res.json();
+    return { success: data.success, transactions: localUpdated };
+  } catch (err) {
+    console.error('Error updating status on Google Sheet', err);
+    return { success: false, error: err.message, transactions: localUpdated };
+  }
+};
+
+// =========================================================================
+// ADMIN AUTHENTICATION
+// =========================================================================
+
 export const validateAdminCredentials = (name, nickname, password) => {
   const cleanName = (name || '').trim().toLowerCase();
   const cleanNickname = (nickname || '').trim().toLowerCase();

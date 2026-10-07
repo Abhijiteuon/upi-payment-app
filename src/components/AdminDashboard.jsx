@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   getTransactions, 
-  updateTransactionStatus, 
   deleteTransaction, 
   addTransaction,
-  setAdminSession 
+  setAdminSession,
+  getAppsScriptUrl,
+  setAppsScriptUrl,
+  fetchRemoteTransactions,
+  updateRemoteStatus 
 } from '../services/storage';
 
 function AdminDashboard({ onLogout }) {
@@ -12,7 +15,10 @@ function AdminDashboard({ onLogout }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [notification, setNotification] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [scriptUrlInput, setScriptUrlInput] = useState(getAppsScriptUrl());
 
   // Form for manual entry
   const [manualForm, setManualForm] = useState({
@@ -25,29 +31,54 @@ function AdminDashboard({ onLogout }) {
     utr: ''
   });
 
-  const loadData = () => {
-    const list = getTransactions();
-    setTransactions(list);
+  const loadData = async (showToastMsg = false) => {
+    setIsLoading(true);
+    const local = getTransactions();
+    setTransactions(local);
+
+    const hasUrl = getAppsScriptUrl();
+    if (hasUrl) {
+      const result = await fetchRemoteTransactions();
+      if (result.success) {
+        setTransactions(result.transactions);
+        if (showToastMsg) showToast('✓ Synced with Google Sheets successfully!');
+      } else {
+        if (showToastMsg) showToast('⚠️ Could not sync with Google Sheets. Showing cached data.');
+      }
+    } else {
+      if (showToastMsg) showToast('ℹ️ Local mode active. Connect Google Sheets for live sync.');
+    }
+    setIsLoading(false);
   };
 
   useEffect(() => {
     loadData();
+    // Auto-refresh every 30 seconds if URL is set
+    const interval = setInterval(() => {
+      if (getAppsScriptUrl()) {
+        loadData(false);
+      }
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const showToast = (msg) => {
     setNotification(msg);
-    setTimeout(() => setNotification(''), 3000);
+    setTimeout(() => setNotification(''), 4000);
   };
 
-  const handleStatusChange = (id, newStatus) => {
+  const handleStatusChange = async (id, newStatus) => {
     let customNote = '';
     if (newStatus === 'failed') {
       customNote = window.prompt('Optional: Enter reason for marking payment as failed (or leave empty):', 'Invalid UTR / Credit not received');
       if (customNote === null) return; // User cancelled
     }
-    const updated = updateTransactionStatus(id, newStatus, customNote);
-    setTransactions(updated);
-    showToast(`Status updated to "${newStatus.toUpperCase()}" for ${id}`);
+    
+    setIsLoading(true);
+    const result = await updateRemoteStatus(id, newStatus, customNote);
+    setTransactions(result.transactions);
+    setIsLoading(false);
+    showToast(`✓ Marked "${newStatus.toUpperCase()}" for ID ${id}`);
   };
 
   const handleDelete = (id) => {
@@ -76,6 +107,14 @@ function AdminDashboard({ onLogout }) {
     showToast(`Created manual transaction: ${created.verificationId}`);
   };
 
+  const handleSaveSettings = (e) => {
+    e.preventDefault();
+    setAppsScriptUrl(scriptUrlInput);
+    setShowSettingsModal(false);
+    showToast('Saved Google Sheets API URL. Syncing...');
+    loadData(true);
+  };
+
   const handleExportData = () => {
     const jsonStr = JSON.stringify(transactions, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -96,20 +135,20 @@ function AdminDashboard({ onLogout }) {
   // Filtered transactions
   const filtered = transactions.filter(t => {
     const matchSearch = 
-      t.verificationId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.verificationId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.phone && t.phone.includes(searchTerm)) ||
       (t.utr && t.utr.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (t.email && t.email.toLowerCase().includes(searchTerm.toLowerCase()));
 
     if (!matchSearch) return false;
     if (filterStatus === 'all') return true;
-    return t.status === filterStatus;
+    return (t.status || 'pending') === filterStatus;
   });
 
   // Calculate statistics
   const totalCount = transactions.length;
-  const pendingCount = transactions.filter(t => t.status === 'pending').length;
+  const pendingCount = transactions.filter(t => (t.status || 'pending') === 'pending').length;
   const successCount = transactions.filter(t => t.status === 'successful').length;
   const failedCount = transactions.filter(t => t.status === 'failed').length;
   const totalRevenue = transactions
@@ -130,18 +169,44 @@ function AdminDashboard({ onLogout }) {
     }
   };
 
+  const hasSheetUrl = Boolean(getAppsScriptUrl());
+
   return (
     <div className="admin-panel-container fade-in">
       {/* Top Banner */}
       <div className="admin-header-row">
         <div>
-          <span className="admin-badge">ADMIN CONTROL PANEL</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+            <span className="admin-badge">ADMIN CONTROL PANEL</span>
+            <span className={`sync-status-badge ${hasSheetUrl ? 'online' : 'offline'}`}>
+              {hasSheetUrl ? '🟢 Google Sheet Live Sync' : '🟡 Local Storage Mode'}
+            </span>
+          </div>
           <h1 className="admin-title">Payment Verification Dashboard</h1>
           <p className="admin-subtitle">Logged in as: <strong>Abhijit Kumar (Gopu)</strong></p>
         </div>
+        
         <div className="admin-top-actions">
+          <button 
+            onClick={() => loadData(true)} 
+            className="btn-action-secondary"
+            disabled={isLoading}
+            title="Fetch latest responses from Google Sheet"
+          >
+            {isLoading ? '⏳ Refreshing...' : '🔄 Sync Sheet'}
+          </button>
+          <button 
+            onClick={() => {
+              setScriptUrlInput(getAppsScriptUrl());
+              setShowSettingsModal(true);
+            }} 
+            className="btn-action-secondary"
+            title="Configure Google Sheet API connection"
+          >
+            ⚙️ Sheet Setup
+          </button>
           <button onClick={() => setShowAddModal(true)} className="btn-action-primary">
-            + New Record
+            + New
           </button>
           <button onClick={handleExportData} className="btn-action-secondary">
             💾 Export
@@ -155,6 +220,26 @@ function AdminDashboard({ onLogout }) {
       {notification && (
         <div className="admin-toast fade-in">
           {notification}
+        </div>
+      )}
+
+      {/* Sync Help Alert if no URL configured */}
+      {!hasSheetUrl && (
+        <div className="sheet-setup-notice fade-in">
+          <div className="notice-icon">💡</div>
+          <div className="notice-body">
+            <strong>Connect Live Google Sheet Sync:</strong>
+            <p>To automatically pull responses submitted by users on other devices, connect your Google Sheet Apps Script Web App URL.</p>
+            <button 
+              className="btn-setup-link" 
+              onClick={() => {
+                setScriptUrlInput(getAppsScriptUrl());
+                setShowSettingsModal(true);
+              }}
+            >
+              Click here to set up Google Sheet Sync (1 min setup) →
+            </button>
+          </div>
         </div>
       )}
 
@@ -232,6 +317,11 @@ function AdminDashboard({ onLogout }) {
         {filtered.length === 0 ? (
           <div className="no-records-box">
             <p>No payment records matching your filter.</p>
+            {hasSheetUrl && (
+              <button onClick={() => loadData(true)} className="back-btn" style={{ marginTop: '1rem' }}>
+                🔄 Sync with Google Sheet
+              </button>
+            )}
           </div>
         ) : (
           <div className="tx-table-container">
@@ -248,10 +338,10 @@ function AdminDashboard({ onLogout }) {
               </thead>
               <tbody>
                 {filtered.map(t => (
-                  <tr key={t.verificationId} className={`tx-row-status-${t.status}`}>
+                  <tr key={t.verificationId || t.name + t.createdAt} className={`tx-row-status-${t.status || 'pending'}`}>
                     <td>
-                      <div className="tx-id-badge">{t.verificationId}</div>
-                      <div className="tx-date-sub">{formatDate(t.createdAt)}</div>
+                      <div className="tx-id-badge">{t.verificationId || 'NO-ID'}</div>
+                      <div className="tx-date-sub">{formatDate(t.createdAt || t.timestamp)}</div>
                     </td>
                     <td>
                       <div className="tx-payer-name">{t.name}</div>
@@ -261,18 +351,18 @@ function AdminDashboard({ onLogout }) {
                     <td>
                       <div className="tx-amount-highlight">₹{t.amount}</div>
                       <div className="tx-purpose-sub">{t.purpose}</div>
-                      <span className="source-tag">{t.source}</span>
+                      {t.source && <span className="source-tag">{t.source}</span>}
                     </td>
                     <td>
                       {t.utr ? (
                         <span className="mono utr-pill">{t.utr}</span>
                       ) : (
-                        <span className="text-muted-small">No UTR</span>
+                        <span className="text-muted-small">-</span>
                       )}
                     </td>
                     <td>
-                      <span className={`status-badge-pill ${t.status}`}>
-                        {t.status === 'pending' && '⏳ In Progress'}
+                      <span className={`status-badge-pill ${t.status || 'pending'}`}>
+                        {(!t.status || t.status === 'pending') && '⏳ In Progress'}
                         {t.status === 'successful' && '✅ Successful'}
                         {t.status === 'failed' && '❌ Failed'}
                       </span>
@@ -287,7 +377,7 @@ function AdminDashboard({ onLogout }) {
                         <button
                           className="btn-mark-success"
                           title="Mark as Payment Successful"
-                          disabled={t.status === 'successful'}
+                          disabled={t.status === 'successful' || isLoading}
                           onClick={() => handleStatusChange(t.verificationId, 'successful')}
                         >
                           ✓ Success
@@ -295,7 +385,7 @@ function AdminDashboard({ onLogout }) {
                         <button
                           className="btn-mark-fail"
                           title="Mark as Payment Failed"
-                          disabled={t.status === 'failed'}
+                          disabled={t.status === 'failed' || isLoading}
                           onClick={() => handleStatusChange(t.verificationId, 'failed')}
                         >
                           ✕ Fail
@@ -303,7 +393,7 @@ function AdminDashboard({ onLogout }) {
                         <button
                           className="btn-mark-pending"
                           title="Reset to Pending"
-                          disabled={t.status === 'pending'}
+                          disabled={(!t.status || t.status === 'pending') || isLoading}
                           onClick={() => handleStatusChange(t.verificationId, 'pending')}
                         >
                           ↺ Reset
@@ -325,6 +415,54 @@ function AdminDashboard({ onLogout }) {
         )}
       </div>
 
+      {/* Settings Modal (Google Apps Script API URL) */}
+      {showSettingsModal && (
+        <div className="modal-backdrop" onClick={() => setShowSettingsModal(false)}>
+          <div className="modal-dialog glass-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Google Sheets Live Sync Setup</h3>
+              <button className="modal-close" onClick={() => setShowSettingsModal(false)}>&times;</button>
+            </div>
+            
+            <form onSubmit={handleSaveSettings}>
+              <div className="form-group">
+                <label>Google Apps Script Web App URL</label>
+                <input
+                  type="url"
+                  className="form-control mono-input"
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  value={scriptUrlInput}
+                  onChange={(e) => setScriptUrlInput(e.target.value)}
+                  required
+                />
+                <small className="help-text" style={{ display: 'block', marginTop: '0.4rem', color: '#94a3b8' }}>
+                  Deploy the Apps Script on your Google Sheet as a Web App (Access: Anyone) and paste the URL here.
+                </small>
+              </div>
+
+              <div className="modal-actions" style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+                <button type="submit" className="submit-btn" style={{ flex: 1 }}>
+                  Save & Connect
+                </button>
+                <button 
+                  type="button" 
+                  className="back-btn" 
+                  onClick={() => {
+                    setScriptUrlInput('');
+                    setAppsScriptUrl('');
+                    setShowSettingsModal(false);
+                    showToast('Cleared Sheet URL. Reverted to local mode.');
+                    loadData(true);
+                  }}
+                >
+                  Disconnect
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Manual Entry Modal */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
@@ -335,7 +473,7 @@ function AdminDashboard({ onLogout }) {
             </div>
             <form onSubmit={handleAddManual}>
               <div className="form-group">
-                <label>Payer Name</label>
+                <label>Payer Name *</label>
                 <input
                   type="text"
                   className="form-control"
@@ -345,7 +483,7 @@ function AdminDashboard({ onLogout }) {
                 />
               </div>
               <div className="form-group">
-                <label>Amount (₹)</label>
+                <label>Amount (₹) *</label>
                 <input
                   type="number"
                   className="form-control"
@@ -358,7 +496,7 @@ function AdminDashboard({ onLogout }) {
                 <label>UTR Number</label>
                 <input
                   type="text"
-                  className="form-control"
+                  className="form-control mono-input"
                   placeholder="12-digit reference"
                   value={manualForm.utr}
                   onChange={(e) => setManualForm({...manualForm, utr: e.target.value})}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTransactionById } from '../services/storage';
+import { fetchRemoteStatusById } from '../services/storage';
 import PaymentReceipt from './PaymentReceipt';
 
 function StatusCheck({ initialVerificationId = '', onBackToPay }) {
@@ -7,8 +7,9 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
   const [transaction, setTransaction] = useState(null);
   const [searched, setSearched] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
-  const performSearch = React.useCallback((idToSearch) => {
+  const performSearch = React.useCallback(async (idToSearch) => {
     setErrorMsg('');
     const id = (idToSearch || queryId).trim();
     if (!id) {
@@ -18,13 +19,22 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
       return;
     }
 
-    const result = getTransactionById(id);
+    setIsSearching(true);
     setSearched(true);
-    if (result) {
-      setTransaction(result);
-    } else {
-      setTransaction(null);
-      setErrorMsg(`No transaction found for Verification ID: "${id}". Please verify the ID or check if it was entered correctly.`);
+
+    try {
+      const result = await fetchRemoteStatusById(id);
+      if (result) {
+        setTransaction(result);
+      } else {
+        setTransaction(null);
+        setErrorMsg(`No transaction found for Verification ID: "${id}". Please verify the ID or check if it was entered correctly.`);
+      }
+    } catch (err) {
+      console.error('Error looking up transaction', err);
+      setErrorMsg('Error querying payment status. Please try again.');
+    } finally {
+      setIsSearching(false);
     }
   }, [queryId]);
 
@@ -77,15 +87,22 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
               onChange={(e) => setQueryId(e.target.value.toUpperCase())}
               required
             />
-            <button type="submit" className="search-btn">
-              Check Status
+            <button type="submit" className="search-btn" disabled={isSearching}>
+              {isSearching ? 'Checking...' : 'Check Status'}
             </button>
           </div>
         </div>
       </form>
 
+      {/* Loading state */}
+      {isSearching && (
+        <div className="status-loading fade-in" style={{ textAlign: 'center', padding: '1.5rem', color: '#a5b4fc' }}>
+          <p>⏳ Fetching latest payment verification from database...</p>
+        </div>
+      )}
+
       {/* Error / Not Found */}
-      {searched && errorMsg && (
+      {!isSearching && searched && errorMsg && (
         <div className="status-alert alert-error fade-in">
           <div className="alert-icon">⚠️</div>
           <div className="alert-body">
@@ -96,7 +113,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
       )}
 
       {/* Found Transaction Results */}
-      {searched && transaction && (
+      {!isSearching && searched && transaction && (
         <div className="status-result fade-in">
           {transaction.status === 'successful' && (
             <PaymentReceipt 
@@ -108,7 +125,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
             />
           )}
 
-          {transaction.status === 'pending' && (
+          {(!transaction.status || transaction.status === 'pending') && (
             <div className="status-card pending-card">
               <div className="status-card-header">
                 <div className="status-icon-badge badge-pending">
@@ -154,7 +171,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
                 )}
                 <div className="tx-summary-row">
                   <span>Submitted On:</span>
-                  <span>{formatDate(transaction.createdAt)}</span>
+                  <span>{formatDate(transaction.createdAt || transaction.timestamp)}</span>
                 </div>
               </div>
 
@@ -202,7 +219,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
                 </div>
                 <div className="tx-summary-row">
                   <span>Date:</span>
-                  <span>{formatDate(transaction.createdAt)}</span>
+                  <span>{formatDate(transaction.createdAt || transaction.timestamp)}</span>
                 </div>
               </div>
 
