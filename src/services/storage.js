@@ -2,13 +2,15 @@ const STORAGE_KEY = 'upi_payment_transactions';
 const ADMIN_SESSION_KEY = 'upi_admin_session';
 const SHEET_URL_KEY = 'upi_sheet_url';
 
-// Default Google Sheet or Apps Script URL (stored in localStorage)
+// Default Google Sheet for the UPI Payment App Form Responses
+export const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1zfpeMPKzwkTGeGsGRI69ya6NW6y_N7NFsa3QQY1XIh8/edit?gid=450698937';
+
 export const getSheetUrl = () => {
-  return localStorage.getItem(SHEET_URL_KEY) || '';
+  return localStorage.getItem(SHEET_URL_KEY) || DEFAULT_SHEET_URL;
 };
 
 export const setSheetUrl = (url) => {
-  localStorage.setItem(SHEET_URL_KEY, (url || '').trim());
+  localStorage.setItem(SHEET_URL_KEY, (url || DEFAULT_SHEET_URL).trim());
 };
 
 // Aliases for compatibility
@@ -149,7 +151,7 @@ export const fetchRemoteTransactions = async () => {
   }
 
   try {
-    // Check if URL is an Apps Script Web App
+    // 1. Check if URL is an Apps Script Web App
     if (configuredUrl.includes('script.google.com')) {
       const res = await fetch(`${configuredUrl}?action=getTransactions&t=${Date.now()}`);
       const data = await res.json();
@@ -158,14 +160,34 @@ export const fetchRemoteTransactions = async () => {
         return { success: true, source: 'apps_script', transactions: data.transactions };
       }
     } 
-    // Check if URL is a Google Spreadsheet Link
+    // 2. Check if URL is a Google Spreadsheet Link
     else if (configuredUrl.includes('spreadsheets/d/')) {
       const match = configuredUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
       if (match && match[1]) {
         const sheetId = match[1];
-        const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&t=${Date.now()}`;
+        
+        // Extract gid if present
+        let gid = '';
+        const gidMatch = configuredUrl.match(/gid=([0-9]+)/);
+        if (gidMatch && gidMatch[1]) {
+          gid = gidMatch[1];
+        }
+
+        const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json${gid ? `&gid=${gid}` : ''}&t=${Date.now()}`;
         const res = await fetch(gvizUrl);
         const text = await res.text();
+
+        // Check if sheet access is restricted
+        if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+          console.warn('Google Sheet returned HTML login page. Access is set to Restricted.');
+          return { 
+            success: false, 
+            error: 'RESTRICTED', 
+            message: 'Google Sheet is Restricted. Please set Share access to "Anyone with the link can view".', 
+            transactions: localList 
+          };
+        }
+
         const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
         const data = JSON.parse(jsonStr);
         const parsedTxs = parseGVizData(data);

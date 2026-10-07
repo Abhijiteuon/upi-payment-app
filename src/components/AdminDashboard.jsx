@@ -17,6 +17,7 @@ function AdminDashboard({ onLogout }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [notification, setNotification] = useState('');
+  const [sheetError, setSheetError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [scriptUrlInput, setScriptUrlInput] = useState(getAppsScriptUrl());
 
@@ -33,20 +34,21 @@ function AdminDashboard({ onLogout }) {
 
   const loadData = async (showToastMsg = false) => {
     setIsLoading(true);
+    setSheetError('');
     const local = getTransactions();
     setTransactions(local);
 
-    const hasUrl = getAppsScriptUrl();
-    if (hasUrl) {
-      const result = await fetchRemoteTransactions();
-      if (result.success) {
-        setTransactions(result.transactions);
-        if (showToastMsg) showToast('✓ Synced with Google Sheets successfully!');
-      } else {
-        if (showToastMsg) showToast('⚠️ Could not sync with Google Sheets. Showing cached data.');
-      }
+    const result = await fetchRemoteTransactions();
+    if (result.success && Array.isArray(result.transactions)) {
+      setTransactions(result.transactions);
+      if (showToastMsg) showToast('✓ Synced with Google Sheets successfully!');
     } else {
-      if (showToastMsg) showToast('ℹ️ Local mode active. Connect Google Sheets for live sync.');
+      if (result.error === 'RESTRICTED') {
+        setSheetError(result.message);
+      }
+      if (showToastMsg) {
+        showToast(result.message || '⚠️ Could not sync with Google Sheets. Showing cached data.');
+      }
     }
     setIsLoading(false);
   };
@@ -228,22 +230,14 @@ function AdminDashboard({ onLogout }) {
         </div>
       )}
 
-      {/* Optional Sheet Sync Tip if not connected */}
-      {!hasSheetUrl && (
-        <div className="sheet-setup-notice fade-in">
-          <div className="notice-icon">💡</div>
-          <div className="notice-body">
-            <strong>Optional Google Sheet Direct Link:</strong>
-            <p>Cloud sync is active across all devices. If you also want direct 2-way sync with your Google Sheet, you can add your Apps Script URL anytime.</p>
-            <button 
-              className="btn-setup-link" 
-              onClick={() => {
-                setScriptUrlInput(getAppsScriptUrl());
-                setShowSettingsModal(true);
-              }}
-            >
-              Configure Google Sheet URL (Optional) →
-            </button>
+      {sheetError && (
+        <div className="status-alert alert-error fade-in" style={{ marginBottom: '1.5rem', marginTop: 0 }}>
+          <div className="alert-icon">🔒</div>
+          <div className="alert-body">
+            <h4>Google Sheet Access is Restricted</h4>
+            <p>
+              To fetch live responses directly, please open your Google Sheet, click the top-right <strong>Share</strong> button, and change <strong>General access</strong> to <em>"Anyone with the link (Viewer)"</em>.
+            </p>
           </div>
         </div>
       )}
