@@ -88,14 +88,12 @@ export const submitToGoogleForm = async (txData, statusOverride = null) => {
     data.append("entry.1090650382", txData.verificationId || '');
 
     const effectiveStatus = (statusOverride || txData.status || 'pending').toLowerCase();
-    let statusLabel = 'Under Progress';
     if (effectiveStatus.includes('success')) {
-      statusLabel = 'Payment Successful';
+      data.append("entry.291880096", "Successful");
     } else if (effectiveStatus.includes('fail') || effectiveStatus.includes('reject')) {
-      statusLabel = 'Payment Failed';
+      data.append("entry.291880096", "Failed");
     }
-
-    data.append("entry.291880096", statusLabel);
+    // If pending, we omit entry.291880096 so Google Form accepts submission cleanly without 400 error
 
     await fetch(GOOGLE_FORM_URL, {
       method: "POST",
