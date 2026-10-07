@@ -142,23 +142,22 @@ function parseGVizData(data) {
       status = 'failed';
     }
 
-    const notes = getVal(/notes|reason/i);
-    const timestamp = getVal(/timestamp|date/i);
+    const cleanVerificationId = (verificationId || '').trim().toUpperCase();
 
-    if (name || verificationId) {
+    if (name || cleanVerificationId) {
       transactions.push({
-        verificationId: verificationId || `VER-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        name: name || 'Anonymous',
-        email,
-        phone,
-        purpose: purpose || 'UPI Payment',
-        source: source || 'Individual',
-        amount: amount || '0.00',
-        utr,
+        verificationId: cleanVerificationId || `VER-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        name: (name || 'Anonymous').trim(),
+        email: (email || '').trim(),
+        phone: (phone || '').trim(),
+        purpose: (purpose || 'UPI Payment').trim(),
+        source: (source || 'Individual').trim(),
+        amount: (amount || '0.00').trim(),
+        utr: (utr || '').trim(),
         status,
         createdAt: parseGoogleDate(timestamp),
         verifiedAt: status === 'successful' ? new Date().toISOString() : null,
-        notes
+        notes: (notes || '').trim()
       });
     }
   }
@@ -220,8 +219,11 @@ export const fetchRemoteTransactions = async () => {
         if (parsedTxs.length > 0) {
           // Merge local status overrides with sheet rows
           const merged = parsedTxs.map(remoteTx => {
-            const localMatch = localList.find(l => (l.verificationId || '').toUpperCase() === (remoteTx.verificationId || '').toUpperCase());
-            if (localMatch && localMatch.status !== 'pending' && remoteTx.status === 'pending') {
+            if (remoteTx.status !== 'pending') {
+              return remoteTx;
+            }
+            const localMatch = localList.find(l => (l.verificationId || '').trim().toUpperCase() === (remoteTx.verificationId || '').trim().toUpperCase());
+            if (localMatch && localMatch.status !== 'pending') {
               return { ...remoteTx, status: localMatch.status, notes: localMatch.notes || remoteTx.notes };
             }
             return remoteTx;
