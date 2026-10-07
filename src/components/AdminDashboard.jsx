@@ -420,34 +420,36 @@ function AdminDashboard({ onLogout }) {
         )}
       </div>
 
-      {/* Settings Modal (Google Apps Script API URL) */}
+      {/* Settings Modal (Google Sheet URL or Apps Script URL) */}
       {showSettingsModal && (
         <div className="modal-backdrop" onClick={() => setShowSettingsModal(false)}>
           <div className="modal-dialog glass-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Google Sheets Live Sync Setup</h3>
+              <h3>Connect Google Sheet Responses</h3>
               <button className="modal-close" onClick={() => setShowSettingsModal(false)}>&times;</button>
             </div>
             
             <form onSubmit={handleSaveSettings}>
               <div className="form-group">
-                <label>Google Apps Script Web App URL</label>
+                <label>Google Sheet Link or Apps Script URL</label>
                 <input
-                  type="url"
+                  type="text"
                   className="form-control mono-input"
-                  placeholder="https://script.google.com/macros/s/.../exec"
+                  placeholder="https://docs.google.com/spreadsheets/d/.../edit"
                   value={scriptUrlInput}
                   onChange={(e) => setScriptUrlInput(e.target.value)}
                   required
                 />
-                <small className="help-text" style={{ display: 'block', marginTop: '0.4rem', color: '#94a3b8' }}>
-                  Deploy the Apps Script on your Google Sheet as a Web App (Access: Anyone) and paste the URL here.
+                <small className="help-text" style={{ display: 'block', marginTop: '0.5rem', color: '#94a3b8', lineHeight: '1.4' }}>
+                  📌 <strong>Option 1 (Easiest):</strong> Paste your Google Sheet URL (ensure General Access is set to <em>"Anyone with the link can view"</em>). All responses will be fetched live!
+                  <br />
+                  ⚡ <strong>Option 2 (2-Way Write):</strong> Paste your deployed Google Apps Script Web App URL.
                 </small>
               </div>
 
               <div className="modal-actions" style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                 <button type="submit" className="submit-btn" style={{ flex: 1 }}>
-                  Save & Connect
+                  Save & Connect Sheet
                 </button>
                 <button 
                   type="button" 
@@ -456,11 +458,11 @@ function AdminDashboard({ onLogout }) {
                     setScriptUrlInput('');
                     setAppsScriptUrl('');
                     setShowSettingsModal(false);
-                    showToast('Cleared Sheet URL. Reverted to local mode.');
+                    showToast('Cleared Sheet URL.');
                     loadData(true);
                   }}
                 >
-                  Disconnect
+                  Clear
                 </button>
               </div>
             </form>

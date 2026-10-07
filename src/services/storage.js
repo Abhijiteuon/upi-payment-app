@@ -1,18 +1,19 @@
 const STORAGE_KEY = 'upi_payment_transactions';
 const ADMIN_SESSION_KEY = 'upi_admin_session';
-const APPS_SCRIPT_URL_KEY = 'upi_apps_script_url';
+const SHEET_URL_KEY = 'upi_sheet_url';
 
-// Primary Automated Cloud Database Store for Cross-Device Synchronization
-const CLOUD_STORE_ID = 'ff808181a09d98f701a117f4495e19a8';
-const CLOUD_API_URL = `https://api.restful-api.dev/objects/${CLOUD_STORE_ID}`;
-
-export const getAppsScriptUrl = () => {
-  return localStorage.getItem(APPS_SCRIPT_URL_KEY) || '';
+// Default Google Sheet or Apps Script URL (stored in localStorage)
+export const getSheetUrl = () => {
+  return localStorage.getItem(SHEET_URL_KEY) || '';
 };
 
-export const setAppsScriptUrl = (url) => {
-  localStorage.setItem(APPS_SCRIPT_URL_KEY, (url || '').trim());
+export const setSheetUrl = (url) => {
+  localStorage.setItem(SHEET_URL_KEY, (url || '').trim());
 };
+
+// Aliases for compatibility
+export const getAppsScriptUrl = getSheetUrl;
+export const setAppsScriptUrl = setSheetUrl;
 
 // Helper to generate a unique Verification ID (e.g., VER-8F2K9M)
 export const generateVerificationId = () => {
@@ -65,62 +66,129 @@ export const saveTransactions = (transactions) => {
 };
 
 // =========================================================================
-// AUTOMATED CLOUD SYNC ENGINE (CROSS-DEVICE REAL-TIME)
+// GOOGLE SHEET / APPS SCRIPT SYNC PARSER
 // =========================================================================
 
-// Sync helper to save array to Cloud Database
-const syncToCloud = async (transactions) => {
-  try {
-    const res = await fetch(CLOUD_API_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: 'ABHIJIT_UPI_TRANSACTIONS_STORE',
-        data: {
-          transactions,
-          lastUpdated: new Date().toISOString()
-        }
-      })
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('Cloud sync background warning:', err);
-    return false;
+// Parses Google GViz JSON output directly from any shared Google Sheet
+function parseGVizData(data) {
+  if (!data || !data.table || !Array.isArray(data.table.rows)) return [];
+  
+  const cols = data.table.cols || [];
+  let headers = cols.map(c => (c && c.label ? c.label.trim() : ''));
+  
+  const rawRows = data.table.rows;
+  let startIndex = 0;
+  
+  // If headers are empty in cols, check if row 0 contains column names
+  if (headers.filter(Boolean).length < 3 && rawRows.length > 0) {
+    const firstRowValues = (rawRows[0].c || []).map(cell => cell ? String(cell.v || cell.f || '').trim() : '');
+    if (firstRowValues.some(v => /name|payment|amount|email|phone|timestamp/i.test(v))) {
+      headers = firstRowValues;
+      startIndex = 1;
+    }
   }
-};
+
+  const transactions = [];
+
+  for (let i = startIndex; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    if (!row || !Array.isArray(row.c)) continue;
+    
+    const rowObj = {};
+    row.c.forEach((cell, idx) => {
+      const headerName = headers[idx] || `col_${idx}`;
+      rowObj[headerName] = cell ? (cell.v !== null && cell.v !== undefined ? cell.v : cell.f || '') : '';
+    });
+
+    const keys = Object.keys(rowObj);
+    const getVal = (pattern) => {
+      const k = keys.find(key => pattern.test(key));
+      return k ? String(rowObj[k]).trim() : '';
+    };
+
+    const name = getVal(/full\s*name|^name$/i);
+    const verificationId = getVal(/payment\s*id|verification\s*id/i);
+    const amount = getVal(/amount/i);
+    const utr = getVal(/upi\s*ref|utr|reference/i);
+    const phone = getVal(/phone|mobile/i);
+    const email = getVal(/email/i);
+    const purpose = getVal(/purpose/i);
+    const source = getVal(/source/i);
+    const status = getVal(/status/i).toLowerCase() || 'pending';
+    const notes = getVal(/notes|reason/i);
+    const timestamp = getVal(/timestamp|date/i);
+
+    if (name || verificationId) {
+      transactions.push({
+        verificationId: verificationId || `VER-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        name: name || 'Anonymous',
+        email,
+        phone,
+        purpose: purpose || 'UPI Payment',
+        source: source || 'Individual',
+        amount: amount || '0.00',
+        utr,
+        status: (status === 'successful' || status === 'failed') ? status : 'pending',
+        createdAt: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
+        verifiedAt: status === 'successful' ? new Date().toISOString() : null,
+        notes
+      });
+    }
+  }
+
+  // Reverse so newest appears first
+  return transactions.reverse();
+}
 
 export const fetchRemoteTransactions = async () => {
-  // 1. Try Custom Google Apps Script if user configured one
-  const scriptUrl = getAppsScriptUrl();
-  if (scriptUrl) {
-    try {
-      const res = await fetch(`${scriptUrl}?action=getTransactions&t=${Date.now()}`);
+  const configuredUrl = getSheetUrl();
+  const localList = getTransactions();
+
+  if (!configuredUrl) {
+    return { success: true, source: 'local', transactions: localList };
+  }
+
+  try {
+    // Check if URL is an Apps Script Web App
+    if (configuredUrl.includes('script.google.com')) {
+      const res = await fetch(`${configuredUrl}?action=getTransactions&t=${Date.now()}`);
       const data = await res.json();
       if (data && data.success && Array.isArray(data.transactions)) {
         saveTransactions(data.transactions);
         return { success: true, source: 'apps_script', transactions: data.transactions };
       }
-    } catch (err) {
-      console.warn('Google Apps script fetch error, falling back to cloud sync', err);
-    }
-  }
-
-  // 2. Fetch from Automated Cloud Database
-  try {
-    const res = await fetch(`${CLOUD_API_URL}?t=${Date.now()}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.data && Array.isArray(data.data.transactions)) {
-        const cloudList = data.data.transactions;
-        saveTransactions(cloudList);
-        return { success: true, source: 'cloud_db', transactions: cloudList };
+    } 
+    // Check if URL is a Google Spreadsheet Link
+    else if (configuredUrl.includes('spreadsheets/d/')) {
+      const match = configuredUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (match && match[1]) {
+        const sheetId = match[1];
+        const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&t=${Date.now()}`;
+        const res = await fetch(gvizUrl);
+        const text = await res.text();
+        const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+        const data = JSON.parse(jsonStr);
+        const parsedTxs = parseGVizData(data);
+        
+        if (parsedTxs.length > 0) {
+          // Merge local status overrides with sheet rows
+          const merged = parsedTxs.map(remoteTx => {
+            const localMatch = localList.find(l => (l.verificationId || '').toUpperCase() === (remoteTx.verificationId || '').toUpperCase());
+            if (localMatch && localMatch.status !== 'pending' && remoteTx.status === 'pending') {
+              return { ...remoteTx, status: localMatch.status, notes: localMatch.notes || remoteTx.notes };
+            }
+            return remoteTx;
+          });
+          saveTransactions(merged);
+          return { success: true, source: 'google_sheet', transactions: merged };
+        }
       }
     }
   } catch (err) {
-    console.warn('Cloud DB fetch error', err);
+    console.warn('Error fetching remote Google Sheet data:', err);
   }
 
-  return { success: false, source: 'local', transactions: getTransactions() };
+  return { success: false, source: 'local', transactions: localList };
 };
 
 export const addTransaction = (formData) => {
@@ -143,27 +211,6 @@ export const addTransaction = (formData) => {
 
   const updated = [newTx, ...localList];
   saveTransactions(updated);
-
-  // Asynchronously push to Cloud Database so Admin instantly sees it
-  (async () => {
-    try {
-      // Pull latest first to avoid overwriting concurrent transactions
-      const res = await fetch(`${CLOUD_API_URL}?t=${Date.now()}`);
-      if (res.ok) {
-        const data = await res.json();
-        const existing = (data && data.data && Array.isArray(data.data.transactions)) ? data.data.transactions : [];
-        const merged = [newTx, ...existing.filter(e => e.verificationId !== newTx.verificationId)];
-        await syncToCloud(merged);
-        saveTransactions(merged);
-      } else {
-        await syncToCloud(updated);
-      }
-    } catch (err) {
-      console.warn('Background addTransaction cloud sync error', err);
-      syncToCloud(updated);
-    }
-  })();
-
   return newTx;
 };
 
@@ -178,7 +225,7 @@ export const fetchRemoteStatusById = async (verificationId) => {
   const query = (verificationId || '').trim().toUpperCase();
   if (!query) return null;
 
-  // Query live cloud transactions
+  // Pull latest from remote
   const result = await fetchRemoteTransactions();
   if (result && Array.isArray(result.transactions)) {
     const match = result.transactions.find(t => (t.verificationId || '').toUpperCase() === query);
@@ -188,7 +235,7 @@ export const fetchRemoteStatusById = async (verificationId) => {
   return getTransactionById(query);
 };
 
-export const updateRemoteStatus = async (verificationId, status, notes = '') => {
+export const updateRemoteStatus = async (verificationId, status, notes = '', utr = '') => {
   const localList = getTransactions();
   const query = (verificationId || '').trim().toUpperCase();
 
@@ -197,8 +244,9 @@ export const updateRemoteStatus = async (verificationId, status, notes = '') => 
       return {
         ...t,
         status,
+        utr: utr || t.utr,
         verifiedAt: status !== 'pending' ? new Date().toISOString() : null,
-        notes: notes !== undefined ? notes : t.notes
+        notes: notes !== undefined && notes !== '' ? notes : t.notes
       };
     }
     return t;
@@ -206,18 +254,15 @@ export const updateRemoteStatus = async (verificationId, status, notes = '') => 
 
   saveTransactions(updated);
 
-  // Sync to Cloud Store
-  await syncToCloud(updated);
-
-  // Also sync to Apps Script if configured
-  const scriptUrl = getAppsScriptUrl();
-  if (scriptUrl) {
+  // If Google Apps Script Web App configured, post to sheet
+  const scriptUrl = getSheetUrl();
+  if (scriptUrl && scriptUrl.includes('script.google.com')) {
     try {
       fetch(scriptUrl, {
         method: 'POST',
         mode: 'cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'updateStatus', verificationId: query, status, notes })
+        body: JSON.stringify({ action: 'updateStatus', verificationId: query, status, notes, utr })
       }).catch(e => console.warn('Apps script post warning', e));
     } catch (e) {
       console.warn('Apps script post error', e);
@@ -234,7 +279,6 @@ export const deleteTransaction = (verificationId) => {
   const transactions = getTransactions();
   const updated = transactions.filter(t => (t.verificationId || '').toUpperCase() !== query);
   saveTransactions(updated);
-  syncToCloud(updated);
   return updated;
 };
 
