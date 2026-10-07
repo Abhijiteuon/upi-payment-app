@@ -71,6 +71,47 @@ export const saveTransactions = (transactions) => {
   }
 };
 
+export const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSe6ijmXl90ufpUplEoEWZj8uL92_jHt-w6kJANlf18dCTgzhA/formResponse';
+
+// Submit response payload to Google Form in the background
+export const submitToGoogleForm = async (txData, statusOverride = null) => {
+  if (!txData) return false;
+  try {
+    const data = new URLSearchParams();
+    data.append("entry.1903499638", txData.name || '');
+    data.append("entry.1388882637", txData.purpose || '');
+    data.append("entry.635018705", txData.source || '');
+    data.append("entry.794330962", String(txData.amount || '0.00'));
+    data.append("entry.1805777836", txData.phone || '');
+    data.append("entry.225713530", txData.email || '');
+    data.append("entry.1730640862", txData.utr || '');
+    data.append("entry.1090650382", txData.verificationId || '');
+
+    const effectiveStatus = (statusOverride || txData.status || 'pending').toLowerCase();
+    let statusLabel = 'Under Progress';
+    if (effectiveStatus.includes('success')) {
+      statusLabel = 'Payment Successful';
+    } else if (effectiveStatus.includes('fail') || effectiveStatus.includes('reject')) {
+      statusLabel = 'Payment Failed';
+    }
+
+    data.append("entry.291880096", statusLabel);
+
+    await fetch(GOOGLE_FORM_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: data.toString()
+    });
+    return true;
+  } catch (err) {
+    console.warn("Background Google Form submission notice:", err);
+    return false;
+  }
+};
+
 // =========================================================================
 // GOOGLE SHEET / APPS SCRIPT SYNC PARSER
 // =========================================================================
@@ -94,7 +135,7 @@ function parseGoogleDate(val) {
   }
 }
 
-// Parses Google GViz JSON output directly from any shared Google Sheet
+// Parses Google GViz JSON output directly from shared Google Sheet, consolidating multi-row responses
 function parseGVizData(data) {
   if (!data || !data.table || !Array.isArray(data.table.rows)) return [];
   
@@ -113,7 +154,8 @@ function parseGVizData(data) {
     }
   }
 
-  const transactions = [];
+  // Use a Map to consolidate multiple row submissions for the same verificationId
+  const txMap = new Map();
 
   for (let i = startIndex; i < rawRows.length; i++) {
     const row = rawRows[i];
@@ -140,35 +182,63 @@ function parseGVizData(data) {
     const purpose = getVal(/purpose/i);
     const source = getVal(/source/i);
     const rawStatus = getVal(/payment\s*status|^status$/i).toLowerCase();
+    
     let status = 'pending';
-    if (/success|verif|approv|complet/i.test(rawStatus)) {
+    if (/success|verif|approv|complet|option\s*1/i.test(rawStatus)) {
       status = 'successful';
     } else if (/fail|reject|declin/i.test(rawStatus)) {
       status = 'failed';
     }
 
     const cleanVerificationId = (verificationId || '').trim().toUpperCase();
+    const rowTimestamp = parseGoogleDate(getVal(/timestamp|date/i));
 
     if (name || cleanVerificationId) {
-      transactions.push({
-        verificationId: cleanVerificationId || `VER-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        name: (name || 'Anonymous').trim(),
-        email: (email || '').trim(),
-        phone: (phone || '').trim(),
-        purpose: (purpose || 'UPI Payment').trim(),
-        source: (source || 'Individual').trim(),
-        amount: (amount || '0.00').trim(),
-        utr: (utr || '').trim(),
-        status,
-        createdAt: parseGoogleDate(getVal(/timestamp|date/i)),
-        verifiedAt: status === 'successful' ? new Date().toISOString() : null,
-        notes: (getVal(/notes|reason/i) || '').trim()
-      });
+      const key = cleanVerificationId || `ROW_${i}_${(name || 'ANON').toUpperCase()}`;
+
+      if (txMap.has(key)) {
+        const existing = txMap.get(key);
+        // If the new row has a concrete verified/failed status, it takes precedence
+        const mergedStatus = status !== 'pending' ? status : existing.status;
+        const mergedVerifiedAt = mergedStatus === 'successful' 
+          ? (existing.verifiedAt || (status === 'successful' ? rowTimestamp : new Date().toISOString()))
+          : null;
+
+        txMap.set(key, {
+          verificationId: existing.verificationId || cleanVerificationId,
+          name: name || existing.name,
+          email: email || existing.email,
+          phone: phone || existing.phone,
+          purpose: purpose || existing.purpose,
+          source: source || existing.source,
+          amount: amount || existing.amount,
+          utr: utr || existing.utr,
+          status: mergedStatus,
+          createdAt: existing.createdAt || rowTimestamp,
+          verifiedAt: mergedVerifiedAt,
+          notes: getVal(/notes|reason/i) || existing.notes || ''
+        });
+      } else {
+        txMap.set(key, {
+          verificationId: cleanVerificationId || `VER-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+          name: (name || 'Anonymous').trim(),
+          email: (email || '').trim(),
+          phone: (phone || '').trim(),
+          purpose: (purpose || 'UPI Payment').trim(),
+          source: (source || 'Individual').trim(),
+          amount: (amount || '0.00').trim(),
+          utr: (utr || '').trim(),
+          status,
+          createdAt: rowTimestamp,
+          verifiedAt: status === 'successful' ? rowTimestamp : null,
+          notes: (getVal(/notes|reason/i) || '').trim()
+        });
+      }
     }
   }
 
-  // Reverse so newest appears first
-  return transactions.reverse();
+  // Reverse so newest transactions appear first in UI
+  return Array.from(txMap.values()).reverse();
 }
 
 export const fetchRemoteTransactions = async () => {
@@ -220,6 +290,13 @@ export const fetchRemoteTransactions = async () => {
         
         if (parsedTxs.length > 0) {
           // Merge local status overrides with sheet rows
+          const remoteMap = new Map();
+          parsedTxs.forEach(tx => {
+            const k = (tx.verificationId || '').trim().toUpperCase();
+            if (k) remoteMap.set(k, tx);
+          });
+
+          // Update parsed transactions with local non-pending overrides
           const merged = parsedTxs.map(remoteTx => {
             if (remoteTx.status !== 'pending') {
               return remoteTx;
@@ -230,8 +307,16 @@ export const fetchRemoteTransactions = async () => {
             }
             return remoteTx;
           });
-          saveTransactions(merged);
-          return { success: true, source: 'google_sheet', transactions: merged };
+
+          // Prepend any local transactions that haven't appeared in the Google Sheet yet
+          const localOnly = localList.filter(l => {
+            const k = (l.verificationId || '').trim().toUpperCase();
+            return k && !remoteMap.has(k);
+          });
+
+          const finalTransactions = [...localOnly, ...merged];
+          saveTransactions(finalTransactions);
+          return { success: true, source: 'google_sheet', transactions: finalTransactions };
         }
       }
     }
@@ -311,22 +396,45 @@ export const updateRemoteStatus = async (verificationId, status, notes = '', utr
   const localList = getTransactions();
   const query = (verificationId || '').trim().toUpperCase();
 
+  let targetTx = null;
   const updated = localList.map(t => {
     if ((t.verificationId || '').trim().toUpperCase() === query) {
-      return {
+      targetTx = {
         ...t,
         status,
         utr: utr || t.utr,
-        verifiedAt: status !== 'pending' ? new Date().toISOString() : null,
+        verifiedAt: status === 'successful' ? (t.verifiedAt || new Date().toISOString()) : (status === 'pending' ? null : t.verifiedAt),
         notes: notes !== undefined && notes !== '' ? notes : t.notes
       };
+      return targetTx;
     }
     return t;
   });
 
+  // If not found in localList, construct a record
+  if (!targetTx) {
+    targetTx = {
+      verificationId: query,
+      name: '',
+      purpose: '',
+      source: '',
+      amount: '',
+      phone: '',
+      email: '',
+      utr: utr || '',
+      status,
+      verifiedAt: status === 'successful' ? new Date().toISOString() : null,
+      notes
+    };
+    updated.unshift(targetTx);
+  }
+
   saveTransactions(updated);
 
-  // If Google Apps Script Web App configured, post to sheet
+  // Submit response to Google Forms in background so Google Sheet gets marked with status
+  await submitToGoogleForm(targetTx, status);
+
+  // If Google Apps Script Web App configured, also post to script
   const scriptUrl = getSheetUrl();
   if (scriptUrl && scriptUrl.includes('script.google.com')) {
     try {

@@ -3,7 +3,7 @@ import Navbar from './components/Navbar';
 import StatusCheck from './components/StatusCheck';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
-import { addTransaction, getAdminSession, setAdminSession, updateTransactionStatus } from './services/storage';
+import { addTransaction, getAdminSession, setAdminSession, updateTransactionStatus, submitToGoogleForm } from './services/storage';
 import './index.css';
 
 function App() {
@@ -49,30 +49,7 @@ function App() {
       setActiveVerificationId(tx.verificationId);
 
       // 2. Background Google Form submission with mapped Payment ID and UPI Ref ID
-      const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSe6ijmXl90ufpUplEoEWZj8uL92_jHt-w6kJANlf18dCTgzhA/formResponse";
-      const data = new URLSearchParams();
-      data.append("entry.1903499638", formData.name);
-      data.append("entry.1388882637", formData.purpose);
-      data.append("entry.635018705", formData.source);
-      data.append("entry.794330962", formData.amount);
-      data.append("entry.1805777836", formData.phone);
-      data.append("entry.225713530", formData.email);
-      data.append("entry.1730640862", formData.utr || ''); // UPI refID
-      data.append("entry.1090650382", tx.verificationId); // Payment ID
-      data.append("entry.291880096", "Under Progress"); // Payment Status
-
-      try {
-        fetch(formUrl, {
-          method: "POST",
-          mode: "no-cors",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
-          body: data.toString()
-        }).catch(err => console.error("Google form log error", err));
-      } catch (err) {
-        console.error("Error submitting form", err);
-      }
+      submitToGoogleForm(tx, 'pending');
 
       setPaymentStep('qr');
     }
@@ -81,31 +58,14 @@ function App() {
   // Step 2 -> Step 3: User confirms payment made
   const handleConfirmPaid = async () => {
     if (createdTransaction) {
-      // Submit updated Google Form submission with the entered UPI refID
-      const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSe6ijmXl90ufpUplEoEWZj8uL92_jHt-w6kJANlf18dCTgzhA/formResponse";
-      const data = new URLSearchParams();
-      data.append("entry.1903499638", formData.name);
-      data.append("entry.1388882637", formData.purpose);
-      data.append("entry.635018705", formData.source);
-      data.append("entry.794330962", formData.amount);
-      data.append("entry.1805777836", formData.phone);
-      data.append("entry.225713530", formData.email);
-      data.append("entry.1730640862", formData.utr || ''); // UPI refID
-      data.append("entry.1090650382", createdTransaction.verificationId); // Payment ID
-      data.append("entry.291880096", "Under Progress"); // Payment Status
+      const updatedTx = {
+        ...createdTransaction,
+        ...formData,
+        verificationId: createdTransaction.verificationId
+      };
 
-      try {
-        fetch(formUrl, {
-          method: "POST",
-          mode: "no-cors",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
-          body: data.toString()
-        }).catch(err => console.error("Google form update error", err));
-      } catch (err) {
-        console.error("Error updating form with UTR", err);
-      }
+      // Submit updated Google Form submission with the entered UPI refID
+      submitToGoogleForm(updatedTx, 'pending');
 
       if (formData.utr) {
         updateTransactionStatus(createdTransaction.verificationId, 'pending', `User submitted UTR: ${formData.utr}`, formData.utr);
