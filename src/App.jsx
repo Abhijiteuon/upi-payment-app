@@ -59,6 +59,7 @@ function App() {
       data.append("entry.225713530", formData.email);
       data.append("entry.1730640862", formData.utr || ''); // UPI refID
       data.append("entry.1090650382", tx.verificationId); // Payment ID
+      data.append("entry.291880096", "Under Progress"); // Payment Status
 
       try {
         fetch(formUrl, {
@@ -91,6 +92,7 @@ function App() {
       data.append("entry.225713530", formData.email);
       data.append("entry.1730640862", formData.utr || ''); // UPI refID
       data.append("entry.1090650382", createdTransaction.verificationId); // Payment ID
+      data.append("entry.291880096", "Under Progress"); // Payment Status
 
       try {
         fetch(formUrl, {

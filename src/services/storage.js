@@ -134,8 +134,14 @@ function parseGVizData(data) {
     const phone = getVal(/phone|mobile/i);
     const email = getVal(/email/i);
     const purpose = getVal(/purpose/i);
-    const source = getVal(/source/i);
-    const status = getVal(/status/i).toLowerCase() || 'pending';
+    const rawStatus = getVal(/payment\s*status|^status$/i).toLowerCase();
+    let status = 'pending';
+    if (/success|verif|approv|complet/i.test(rawStatus)) {
+      status = 'successful';
+    } else if (/fail|reject|declin/i.test(rawStatus)) {
+      status = 'failed';
+    }
+
     const notes = getVal(/notes|reason/i);
     const timestamp = getVal(/timestamp|date/i);
 
@@ -149,7 +155,7 @@ function parseGVizData(data) {
         source: source || 'Individual',
         amount: amount || '0.00',
         utr,
-        status: (status === 'successful' || status === 'failed') ? status : 'pending',
+        status,
         createdAt: parseGoogleDate(timestamp),
         verifiedAt: status === 'successful' ? new Date().toISOString() : null,
         notes
