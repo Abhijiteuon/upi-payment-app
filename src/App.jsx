@@ -3,7 +3,7 @@ import Navbar from './components/Navbar';
 import StatusCheck from './components/StatusCheck';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
-import { addTransaction, getAdminSession, setAdminSession, updateTransactionStatus } from './services/storage';
+import { addTransaction, getAdminSession, setAdminSession, updateTransactionStatus, submitToGoogleForm } from './services/storage';
 import './index.css';
 
 function App() {
@@ -57,16 +57,18 @@ function App() {
   // Step 2 -> Step 3: User confirms payment made
   const handleConfirmPaid = async () => {
     if (createdTransaction) {
+      setIsSubmitting(true);
+      const updatedTx = { ...createdTransaction, utr: formData.utr };
+      submitToGoogleForm(updatedTx, 'pending');
       if (formData.utr) {
-        setIsSubmitting(true);
         await updateTransactionStatus(
           createdTransaction.verificationId, 
           'pending', 
           `User submitted UTR: ${formData.utr}`, 
           formData.utr
         );
-        setIsSubmitting(false);
       }
+      setIsSubmitting(false);
     }
     setPaymentStep('confirmed');
   };

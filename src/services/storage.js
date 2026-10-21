@@ -3,6 +3,10 @@ import { supabase } from './supabaseClient.js';
 const STORAGE_KEY = 'upi_payment_transactions';
 const ADMIN_SESSION_KEY = 'upi_admin_session';
 
+// Google Form & Google Sheet Endpoints for dual-backup
+export const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSe6ijmXl90ufpUplEoEWZj8uL92_jHt-w6kJANlf18dCTgzhA/formResponse';
+export const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1zfpeMPKzwkTGeGsGRI69ya6NW6y_N7NFsa3QQY1XIh8/edit?gid=450698937';
+
 // Helper to generate a unique Verification ID (e.g., VER-8F2K9M)
 export const generateVerificationId = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -51,7 +55,7 @@ const INITIAL_TRANSACTIONS = [
   }
 ];
 
-// LocalStorage helpers for offline persistence / speed
+// LocalStorage helpers with safe browser environment guards
 export const getTransactions = () => {
   try {
     if (typeof window === 'undefined' || !window.localStorage) {
@@ -80,36 +84,267 @@ export const saveTransactions = (transactions) => {
 };
 
 // =========================================================================
-// SUPABASE OPERATIONS
+// GOOGLE FORMS DUAL-SYNC (Ensures Google Sheet receives every submission)
 // =========================================================================
 
-// Fetch all transactions from Supabase (for Admin Dashboard)
+export const submitToGoogleForm = async (txData, statusOverride = null) => {
+  if (!txData) return false;
+  try {
+    const data = new URLSearchParams();
+    data.append("entry.1903499638", txData.name || '');
+    data.append("entry.1388882637", txData.purpose || '');
+    data.append("entry.635018705", txData.source || '');
+    data.append("entry.794330962", String(txData.amount || '0.00'));
+    data.append("entry.1805777836", txData.phone || '');
+    data.append("entry.225713530", txData.email || '');
+    data.append("entry.1730640862", txData.utr || '');
+    data.append("entry.1090650382", txData.verificationId || '');
+
+    const effectiveStatus = (statusOverride || txData.status || 'pending').toLowerCase();
+    if (effectiveStatus.includes('success')) {
+      data.append("entry.291880096", "Successful");
+    } else if (effectiveStatus.includes('fail') || effectiveStatus.includes('reject')) {
+      data.append("entry.291880096", "Failed");
+    }
+
+    await fetch(GOOGLE_FORM_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: data.toString()
+    });
+    return true;
+  } catch (err) {
+    console.warn("Google Form post notice:", err);
+    return false;
+  }
+};
+
+// =========================================================================
+// GOOGLE SHEET GVIZ PARSER
+// =========================================================================
+
+function parseGoogleDate(val) {
+  if (!val) return new Date().toISOString();
+  try {
+    if (typeof val === 'string' && val.startsWith('Date(') && val.endsWith(')')) {
+      const parts = val.substring(5, val.length - 1).split(',').map(Number);
+      if (parts.length >= 3) {
+        const d = new Date(parts[0], parts[1] || 0, parts[2] || 1, parts[3] || 0, parts[4] || 0, parts[5] || 0);
+        return !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+      }
+    }
+    const d = new Date(val);
+    return !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
+function parseGVizData(data) {
+  if (!data || !data.table || !Array.isArray(data.table.rows)) return [];
+  
+  const cols = data.table.cols || [];
+  let headers = cols.map(c => (c && c.label ? c.label.trim() : ''));
+  const rawRows = data.table.rows;
+  let startIndex = 0;
+  
+  if (headers.filter(Boolean).length < 3 && rawRows.length > 0) {
+    const firstRowValues = (rawRows[0].c || []).map(cell => cell ? String(cell.v || cell.f || '').trim() : '');
+    if (firstRowValues.some(v => /name|payment|amount|email|phone|timestamp/i.test(v))) {
+      headers = firstRowValues;
+      startIndex = 1;
+    }
+  }
+
+  const txMap = new Map();
+
+  for (let i = startIndex; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    if (!row || !Array.isArray(row.c)) continue;
+    
+    const rowObj = {};
+    row.c.forEach((cell, idx) => {
+      const headerName = headers[idx] || `col_${idx}`;
+      rowObj[headerName] = cell ? (cell.v !== null && cell.v !== undefined ? cell.v : cell.f || '') : '';
+    });
+
+    const keys = Object.keys(rowObj);
+    const getVal = (pattern) => {
+      const k = keys.find(key => pattern.test(key));
+      return k ? String(rowObj[k]).trim() : '';
+    };
+
+    const name = getVal(/full\s*name|^name$/i);
+    const verificationId = getVal(/payment\s*id|verification\s*id/i);
+    const amount = getVal(/amount/i);
+    const utr = getVal(/upi\s*ref|utr|reference/i);
+    const phone = getVal(/phone|mobile/i);
+    const email = getVal(/email/i);
+    const purpose = getVal(/purpose/i);
+    const source = getVal(/source/i);
+    const rawStatus = getVal(/payment\s*status|^status$/i).toLowerCase();
+    
+    let status = 'pending';
+    if (/success|verif|approv|complet|option\s*1/i.test(rawStatus)) {
+      status = 'successful';
+    } else if (/fail|reject|declin/i.test(rawStatus)) {
+      status = 'failed';
+    }
+
+    const cleanVerificationId = (verificationId || '').trim().toUpperCase();
+    const rowTimestamp = parseGoogleDate(getVal(/timestamp|date/i));
+
+    if (name || cleanVerificationId) {
+      const key = cleanVerificationId || `ROW_${i}_${(name || 'ANON').toUpperCase()}`;
+
+      if (txMap.has(key)) {
+        const existing = txMap.get(key);
+        const mergedStatus = status !== 'pending' ? status : existing.status;
+        const mergedVerifiedAt = mergedStatus === 'successful' 
+          ? (existing.verifiedAt || (status === 'successful' ? rowTimestamp : new Date().toISOString()))
+          : null;
+
+        txMap.set(key, {
+          verificationId: existing.verificationId || cleanVerificationId,
+          name: name || existing.name,
+          email: email || existing.email,
+          phone: phone || existing.phone,
+          purpose: purpose || existing.purpose,
+          source: source || existing.source,
+          amount: amount || existing.amount,
+          utr: utr || existing.utr,
+          status: mergedStatus,
+          createdAt: existing.createdAt || rowTimestamp,
+          verifiedAt: mergedVerifiedAt,
+          notes: getVal(/notes|reason/i) || existing.notes || ''
+        });
+      } else {
+        txMap.set(key, {
+          verificationId: cleanVerificationId || `VER-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+          name: (name || 'Anonymous').trim(),
+          email: (email || '').trim(),
+          phone: (phone || '').trim(),
+          purpose: (purpose || 'UPI Payment').trim(),
+          source: (source || 'Individual').trim(),
+          amount: (amount || '0.00').trim(),
+          utr: (utr || '').trim(),
+          status,
+          createdAt: rowTimestamp,
+          verifiedAt: status === 'successful' ? rowTimestamp : null,
+          notes: (getVal(/notes|reason/i) || '').trim()
+        });
+      }
+    }
+  }
+
+  return Array.from(txMap.values()).reverse();
+}
+
+// =========================================================================
+// HYBRID DATA OPERATIONS (Supabase + Google Sheet Dual Sync)
+// =========================================================================
+
+// Fetch all transactions, merging Supabase records with Google Sheet records
 export const fetchRemoteTransactions = async () => {
   const localList = getTransactions();
+  const resultMap = new Map();
+
+  // 1. Fetch from Google Sheet GViz API
   try {
-    const { data, error } = await supabase
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/1zfpeMPKzwkTGeGsGRI69ya6NW6y_N7NFsa3QQY1XIh8/gviz/tq?tqx=out:json&gid=450698937&t=${Date.now()}`;
+    const res = await fetch(gvizUrl);
+    const text = await res.text();
+    if (!text.includes('<!DOCTYPE') && text.includes('{')) {
+      const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+      const sheetTxs = parseGVizData(JSON.parse(jsonStr));
+      sheetTxs.forEach(tx => {
+        const k = (tx.verificationId || '').trim().toUpperCase();
+        if (k) resultMap.set(k, tx);
+      });
+    }
+  } catch (err) {
+    console.warn('Google Sheet fetch error:', err);
+  }
+
+  // 2. Fetch from Supabase (Supabase overrides and provides real-time state)
+  try {
+    const { data: sbData, error } = await supabase
       .from('transactions')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.warn('Supabase fetch error, using local fallback:', error.message);
-      return { success: false, source: 'local', transactions: localList };
-    }
+    if (!error && Array.isArray(sbData)) {
+      sbData.forEach(row => {
+        const clientTx = toClientTx(row);
+        const k = (clientTx.verificationId || '').trim().toUpperCase();
+        if (k) {
+          const existing = resultMap.get(k);
+          if (existing) {
+            // Keep the non-pending status if available
+            const bestStatus = clientTx.status !== 'pending' ? clientTx.status : existing.status;
+            resultMap.set(k, {
+              ...existing,
+              ...clientTx,
+              status: bestStatus,
+              utr: clientTx.utr || existing.utr,
+              verifiedAt: clientTx.verifiedAt || existing.verifiedAt
+            });
+          } else {
+            resultMap.set(k, clientTx);
+          }
+        }
+      });
 
-    if (Array.isArray(data)) {
-      const clientTxs = data.map(toClientTx);
-      saveTransactions(clientTxs);
-      return { success: true, source: 'supabase', transactions: clientTxs };
+      // Background auto-sync: Upload any missing sheet records into Supabase
+      const missingInSupabase = Array.from(resultMap.values()).filter(tx => {
+        return !sbData.some(r => r.verification_id === tx.verificationId);
+      });
+
+      if (missingInSupabase.length > 0) {
+        const toInsert = missingInSupabase.map(t => ({
+          verification_id: t.verificationId,
+          name: t.name,
+          email: t.email,
+          phone: t.phone,
+          purpose: t.purpose,
+          source: t.source,
+          amount: parseFloat(t.amount) || 0,
+          utr: t.utr || null,
+          status: t.status || 'pending',
+          notes: t.notes || '',
+          verified_at: t.verifiedAt || null
+        }));
+        supabase.from('transactions').insert(toInsert).then(() => {}).catch(() => {});
+      }
     }
   } catch (err) {
-    console.warn('Network error querying Supabase:', err);
+    console.warn('Supabase fetch error:', err);
+  }
+
+  // 3. Merge with any local offline transactions
+  localList.forEach(localTx => {
+    const k = (localTx.verificationId || '').trim().toUpperCase();
+    if (k && !resultMap.has(k)) {
+      resultMap.set(k, localTx);
+    }
+  });
+
+  const merged = Array.from(resultMap.values()).sort((a, b) => {
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  });
+
+  if (merged.length > 0) {
+    saveTransactions(merged);
+    return { success: true, source: 'hybrid', transactions: merged };
   }
 
   return { success: false, source: 'local', transactions: localList };
 };
 
-// Add new transaction to Supabase
+// Add new transaction: inserts into Supabase AND posts to Google Forms
 export const addTransaction = async (formData) => {
   const localList = getTransactions();
   const verificationId = generateVerificationId();
@@ -129,10 +364,13 @@ export const addTransaction = async (formData) => {
     notes: ''
   };
 
-  // Immediate local cache update
+  // 1. Immediate local cache update
   saveTransactions([newTx, ...localList]);
 
-  // Insert into Supabase
+  // 2. Submit to Google Forms so Google Sheet gets a new row
+  submitToGoogleForm(newTx, 'pending');
+
+  // 3. Insert into Supabase
   try {
     const { data, error } = await supabase
       .from('transactions')
@@ -156,8 +394,7 @@ export const addTransaction = async (formData) => {
     if (error) {
       console.error('Error inserting transaction into Supabase:', error);
     } else if (data) {
-      const inserted = toClientTx(data);
-      return inserted;
+      return toClientTx(data);
     }
   } catch (err) {
     console.error('Failed to sync new transaction to Supabase:', err);
@@ -171,6 +408,7 @@ export const fetchRemoteStatusById = async (verificationId) => {
   const query = (verificationId || '').trim().toUpperCase();
   if (!query) return null;
 
+  // 1. Check Supabase
   try {
     const { data, error } = await supabase
       .from('transactions')
@@ -180,27 +418,33 @@ export const fetchRemoteStatusById = async (verificationId) => {
 
     if (!error && data) {
       const clientTx = toClientTx(data);
-      // Update local copy
-      const localList = getTransactions();
-      const existingIdx = localList.findIndex(t => t.verificationId === query);
-      if (existingIdx >= 0) {
-        localList[existingIdx] = clientTx;
-      } else {
-        localList.unshift(clientTx);
-      }
-      saveTransactions(localList);
       return clientTx;
     }
   } catch (err) {
     console.warn('Supabase fetchRemoteStatusById error:', err);
   }
 
-  // Fallback to local cache
+  // 2. Fallback to Google Sheet GViz API
+  try {
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/1zfpeMPKzwkTGeGsGRI69ya6NW6y_N7NFsa3QQY1XIh8/gviz/tq?tqx=out:json&gid=450698937&t=${Date.now()}`;
+    const res = await fetch(gvizUrl);
+    const text = await res.text();
+    if (!text.includes('<!DOCTYPE') && text.includes('{')) {
+      const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+      const parsedTxs = parseGVizData(JSON.parse(jsonStr));
+      const match = parsedTxs.find(t => (t.verificationId || '').trim().toUpperCase() === query);
+      if (match) return match;
+    }
+  } catch (err) {
+    console.warn('GViz fallback error:', err);
+  }
+
+  // 3. Fallback to local cache
   const local = getTransactions();
   return local.find(t => (t.verificationId || '').trim().toUpperCase() === query) || null;
 };
 
-// Update status and/or UTR in Supabase
+// Update status and/or UTR in Supabase AND post status to Google Forms
 export const updateRemoteStatus = async (verificationId, status, notes = '', utr = '') => {
   const query = (verificationId || '').trim().toUpperCase();
   const localList = getTransactions();
@@ -220,35 +464,49 @@ export const updateRemoteStatus = async (verificationId, status, notes = '', utr
     updateFields.utr = utr;
   }
 
-  // 1. Optimistic local update
+  let targetTx = null;
   const updatedLocal = localList.map(t => {
     if ((t.verificationId || '').trim().toUpperCase() === query) {
-      return {
+      targetTx = {
         ...t,
         status,
         notes: notes !== undefined && notes !== '' ? notes : t.notes,
         utr: utr || t.utr,
         verifiedAt: updateFields.verified_at !== undefined ? updateFields.verified_at : t.verifiedAt
       };
+      return targetTx;
     }
     return t;
   });
+
+  if (!targetTx) {
+    targetTx = {
+      verificationId: query,
+      name: '',
+      purpose: '',
+      source: '',
+      amount: '0.00',
+      phone: '',
+      email: '',
+      utr: utr || '',
+      status,
+      verifiedAt: updateFields.verified_at || null,
+      notes
+    };
+    updatedLocal.unshift(targetTx);
+  }
+
   saveTransactions(updatedLocal);
 
-  // 2. Sync to Supabase
+  // 1. Post to Google Forms so Google Sheet row updates with status!
+  submitToGoogleForm(targetTx, status);
+
+  // 2. Sync to Supabase so real-time WebSocket fires immediately
   try {
-    const { data, error } = await supabase
+    await supabase
       .from('transactions')
       .update(updateFields)
-      .eq('verification_id', query)
-      .select();
-
-    if (error) {
-      console.error('Error updating transaction in Supabase:', error);
-    } else if (data && data.length > 0) {
-      const updatedTxs = await fetchRemoteTransactions();
-      return { success: true, transactions: updatedTxs.transactions };
-    }
+      .eq('verification_id', query);
   } catch (err) {
     console.error('Supabase updateRemoteStatus error:', err);
   }
@@ -278,7 +536,6 @@ export const deleteTransaction = async (verificationId) => {
 // REALTIME SUBSCRIPTIONS
 // =========================================================================
 
-// Listen to changes for a specific Verification ID (used in StatusCheck screen)
 export const subscribeToTransaction = (verificationId, onUpdate) => {
   if (!verificationId) return () => {};
   const query = verificationId.trim().toUpperCase();
@@ -307,7 +564,6 @@ export const subscribeToTransaction = (verificationId, onUpdate) => {
   };
 };
 
-// Listen to all transaction changes (used in AdminDashboard)
 export const subscribeToAllTransactions = (onChange) => {
   const channel = supabase
     .channel(`admin_all_${Date.now()}`)
