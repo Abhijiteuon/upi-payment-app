@@ -24,8 +24,8 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
       <nav className="navbar">
         <div className="nav-container">
           <div className="nav-logo" onClick={() => handleNavClick('pay')}>
-            <span className="logo-badge">⚡</span>
-            <span className="logo-text">Pay Abhijit</span>
+            <img src="/codeed-icon.png" alt="codeED" className="nav-logo-img" />
+            <span className="logo-text">codeED</span>
           </div>
 
           <button 

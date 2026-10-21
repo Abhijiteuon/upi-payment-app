@@ -144,7 +144,16 @@ function App() {
               {paymentStep === 'form' && (
                 <div className="fade-in">
                   <div className="header">
-                    <h1>Pay Abhijit Securely</h1>
+                    <h1 className="pay-heading-with-logo">
+                      <span className="pay-text-gradient">Pay</span>
+                      <img 
+                        src="/codeed-icon.png" 
+                        alt="codeED" 
+                        title="codeED"
+                        className="codeed-brand-logo-inline" 
+                      />
+                      <span className="pay-text-gradient">Securely</span>
+                    </h1>
                     <p>Enter your payment details to generate a secure UPI transaction</p>
                   </div>
 
