@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   getTransactions, 
   deleteTransaction, 
-  addTransaction,
-  setAdminSession,
-  getAppsScriptUrl,
-  setAppsScriptUrl,
-  fetchRemoteTransactions,
-  updateRemoteStatus 
+  addTransaction, 
+  setAdminSession, 
+  fetchRemoteTransactions, 
+  updateRemoteStatus,
+  subscribeToAllTransactions
 } from '../services/storage';
 
 function AdminDashboard({ onLogout }) {
@@ -15,11 +14,8 @@ function AdminDashboard({ onLogout }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [notification, setNotification] = useState('');
-  const [sheetError, setSheetError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [scriptUrlInput, setScriptUrlInput] = useState(getAppsScriptUrl());
 
   // Form for manual entry
   const [manualForm, setManualForm] = useState({
@@ -34,20 +30,16 @@ function AdminDashboard({ onLogout }) {
 
   const loadData = async (showToastMsg = false) => {
     setIsLoading(true);
-    setSheetError('');
     const local = getTransactions();
     setTransactions(local);
 
     const result = await fetchRemoteTransactions();
     if (result.success && Array.isArray(result.transactions)) {
       setTransactions(result.transactions);
-      if (showToastMsg) showToast('✓ Synced with Google Sheets successfully!');
+      if (showToastMsg) showToast('✓ Synced with Supabase Live Database!');
     } else {
-      if (result.error === 'RESTRICTED') {
-        setSheetError(result.message);
-      }
       if (showToastMsg) {
-        showToast(result.message || '⚠️ Could not sync with Google Sheets. Showing cached data.');
+        showToast('⚠️ Could not sync with Supabase. Showing cached data.');
       }
     }
     setIsLoading(false);
@@ -55,13 +47,15 @@ function AdminDashboard({ onLogout }) {
 
   useEffect(() => {
     loadData();
-    // Auto-refresh every 30 seconds if URL is set
-    const interval = setInterval(() => {
-      if (getAppsScriptUrl()) {
-        loadData(false);
-      }
-    }, 30000);
-    return () => clearInterval(interval);
+
+    // Subscribe to live changes in Supabase (new payments, UTR updates from any device)
+    const unsubscribe = subscribeToAllTransactions(() => {
+      loadData(false);
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const showToast = (msg) => {
@@ -78,24 +72,29 @@ function AdminDashboard({ onLogout }) {
     
     setIsLoading(true);
     const result = await updateRemoteStatus(id, newStatus, customNote);
-    setTransactions(result.transactions);
+    if (result && result.transactions) {
+      setTransactions(result.transactions);
+    }
     setIsLoading(false);
     showToast(`✓ Marked "${newStatus.toUpperCase()}" for ID ${id}`);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm(`Are you sure you want to delete transaction ${id}?`)) {
-      const updated = deleteTransaction(id);
+      setIsLoading(true);
+      const updated = await deleteTransaction(id);
       setTransactions(updated);
+      setIsLoading(false);
       showToast(`Transaction ${id} deleted.`);
     }
   };
 
-  const handleAddManual = (e) => {
+  const handleAddManual = async (e) => {
     e.preventDefault();
     if (!manualForm.name || !manualForm.amount) return;
-    const created = addTransaction(manualForm);
-    loadData();
+    setIsLoading(true);
+    const created = await addTransaction(manualForm);
+    await loadData();
     setShowAddModal(false);
     setManualForm({
       name: '',
@@ -106,15 +105,8 @@ function AdminDashboard({ onLogout }) {
       amount: '',
       utr: ''
     });
+    setIsLoading(false);
     showToast(`Created manual transaction: ${created.verificationId}`);
-  };
-
-  const handleSaveSettings = (e) => {
-    e.preventDefault();
-    setAppsScriptUrl(scriptUrlInput);
-    setShowSettingsModal(false);
-    showToast('Saved Google Sheets API URL. Syncing...');
-    loadData(true);
   };
 
   const handleExportData = () => {
@@ -171,8 +163,6 @@ function AdminDashboard({ onLogout }) {
     }
   };
 
-  const hasSheetUrl = Boolean(getAppsScriptUrl());
-
   return (
     <div className="admin-panel-container fade-in">
       {/* Top Banner */}
@@ -180,14 +170,9 @@ function AdminDashboard({ onLogout }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
             <span className="admin-badge">ADMIN CONTROL PANEL</span>
-            <span className="sync-status-badge online">
-              🟢 Cloud Sync Active (Live)
+            <span className="sync-status-badge online" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}>
+              ⚡ Supabase Live Connected
             </span>
-            {hasSheetUrl && (
-              <span className="sync-status-badge online" style={{ background: 'rgba(99, 102, 241, 0.2)', color: '#c7d2fe' }}>
-                📊 Google Sheet Connected
-              </span>
-            )}
           </div>
           <h1 className="admin-title">Payment Verification Dashboard</h1>
           <p className="admin-subtitle">Logged in as: <strong>Abhijit Kumar (Gopu)</strong></p>
@@ -198,19 +183,9 @@ function AdminDashboard({ onLogout }) {
             onClick={() => loadData(true)} 
             className="btn-action-primary"
             disabled={isLoading}
-            title="Fetch latest responses from Cloud Database & Google Sheet"
+            title="Fetch latest responses from Supabase database"
           >
             {isLoading ? '⏳ Refreshing...' : '🔄 Refresh Data'}
-          </button>
-          <button 
-            onClick={() => {
-              setScriptUrlInput(getAppsScriptUrl());
-              setShowSettingsModal(true);
-            }} 
-            className="btn-action-secondary"
-            title="Optional: Link directly to Google Sheets Web App"
-          >
-            ⚙️ Sheet Setup
           </button>
           <button onClick={() => setShowAddModal(true)} className="btn-action-secondary">
             + New
@@ -227,18 +202,6 @@ function AdminDashboard({ onLogout }) {
       {notification && (
         <div className="admin-toast fade-in">
           {notification}
-        </div>
-      )}
-
-      {sheetError && (
-        <div className="status-alert alert-error fade-in" style={{ marginBottom: '1.5rem', marginTop: 0 }}>
-          <div className="alert-icon">🔒</div>
-          <div className="alert-body">
-            <h4>Google Sheet Access is Restricted</h4>
-            <p>
-              To fetch live responses directly, please open your Google Sheet, click the top-right <strong>Share</strong> button, and change <strong>General access</strong> to <em>"Anyone with the link (Viewer)"</em>.
-            </p>
-          </div>
         </div>
       )}
 
@@ -316,11 +279,6 @@ function AdminDashboard({ onLogout }) {
         {filtered.length === 0 ? (
           <div className="no-records-box">
             <p>No payment records matching your filter.</p>
-            {hasSheetUrl && (
-              <button onClick={() => loadData(true)} className="back-btn" style={{ marginTop: '1rem' }}>
-                🔄 Sync with Google Sheet
-              </button>
-            )}
           </div>
         ) : (
           <div className="tx-table-container">
@@ -340,7 +298,7 @@ function AdminDashboard({ onLogout }) {
                   <tr key={t.verificationId || t.name + t.createdAt} className={`tx-row-status-${t.status || 'pending'}`}>
                     <td>
                       <div className="tx-id-badge">{t.verificationId || 'NO-ID'}</div>
-                      <div className="tx-date-sub">{formatDate(t.createdAt || t.timestamp)}</div>
+                      <div className="tx-date-sub">{formatDate(t.createdAt)}</div>
                     </td>
                     <td>
                       <div className="tx-payer-name">{t.name}</div>
@@ -414,56 +372,6 @@ function AdminDashboard({ onLogout }) {
         )}
       </div>
 
-      {/* Settings Modal (Google Sheet URL or Apps Script URL) */}
-      {showSettingsModal && (
-        <div className="modal-backdrop" onClick={() => setShowSettingsModal(false)}>
-          <div className="modal-dialog glass-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Connect Google Sheet Responses</h3>
-              <button className="modal-close" onClick={() => setShowSettingsModal(false)}>&times;</button>
-            </div>
-            
-            <form onSubmit={handleSaveSettings}>
-              <div className="form-group">
-                <label>Google Sheet Link or Apps Script URL</label>
-                <input
-                  type="text"
-                  className="form-control mono-input"
-                  placeholder="https://docs.google.com/spreadsheets/d/.../edit"
-                  value={scriptUrlInput}
-                  onChange={(e) => setScriptUrlInput(e.target.value)}
-                  required
-                />
-                <small className="help-text" style={{ display: 'block', marginTop: '0.5rem', color: '#94a3b8', lineHeight: '1.4' }}>
-                  📌 <strong>Option 1 (Easiest):</strong> Paste your Google Sheet URL (ensure General Access is set to <em>"Anyone with the link can view"</em>). All responses will be fetched live!
-                  <br />
-                  ⚡ <strong>Option 2 (2-Way Write):</strong> Paste your deployed Google Apps Script Web App URL.
-                </small>
-              </div>
-
-              <div className="modal-actions" style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
-                <button type="submit" className="submit-btn" style={{ flex: 1 }}>
-                  Save & Connect Sheet
-                </button>
-                <button 
-                  type="button" 
-                  className="back-btn" 
-                  onClick={() => {
-                    setScriptUrlInput('');
-                    setAppsScriptUrl('');
-                    setShowSettingsModal(false);
-                    showToast('Cleared Sheet URL.');
-                    loadData(true);
-                  }}
-                >
-                  Clear
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Manual Entry Modal */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
@@ -521,8 +429,8 @@ function AdminDashboard({ onLogout }) {
                   onChange={(e) => setManualForm({...manualForm, email: e.target.value})}
                 />
               </div>
-              <button type="submit" className="submit-btn">
-                Save Transaction
+              <button type="submit" className="submit-btn" disabled={isLoading}>
+                {isLoading ? 'Saving...' : 'Save Transaction'}
               </button>
             </form>
           </div>

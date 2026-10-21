@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchRemoteStatusById } from '../services/storage';
+import { fetchRemoteStatusById, subscribeToTransaction } from '../services/storage';
 import PaymentReceipt from './PaymentReceipt';
 
 function StatusCheck({ initialVerificationId = '', onBackToPay }) {
@@ -45,6 +45,20 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
       performSearch(initialVerificationId);
     }
   }, [initialVerificationId, performSearch]);
+
+  // Real-time live subscription for instant receipt unlock when status changes
+  useEffect(() => {
+    if (transaction && transaction.verificationId && transaction.status === 'pending') {
+      const unsubscribe = subscribeToTransaction(transaction.verificationId, (updatedTx) => {
+        if (updatedTx) {
+          setTransaction(updatedTx);
+        }
+      });
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    }
+  }, [transaction?.verificationId, transaction?.status]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -141,8 +155,8 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
                 <p>
                   Your payment verification is currently <strong>under progress</strong>. The receiver (Abhijit) reconciles incoming payments against bank statements.
                 </p>
-                <div className="timeline-hint">
-                  ⏱️ <strong>Estimated Verification Time:</strong> 3 hours to 2 days
+                <div className="timeline-hint" style={{ marginTop: '0.5rem', color: '#38bdf8' }}>
+                  ⚡ <em>This screen will automatically unlock your receipt in real time once verified — no refresh needed!</em>
                 </div>
               </div>
 
@@ -171,12 +185,12 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
                 )}
                 <div className="tx-summary-row">
                   <span>Submitted On:</span>
-                  <span>{formatDate(transaction.createdAt || transaction.timestamp)}</span>
+                  <span>{formatDate(transaction.createdAt)}</span>
                 </div>
               </div>
 
               <div className="status-tip">
-                💡 <em>Tip: You can bookmark this page or keep your Verification ID handy. Once marked successful by the admin, your official payment receipt will become available here.</em>
+                💡 <em>Tip: You can bookmark this page or keep your Verification ID handy. Once marked successful by the admin, your official payment receipt will appear right here.</em>
               </div>
             </div>
           )}
@@ -195,7 +209,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
 
               <div className="status-notice failed-notice">
                 <p>
-                  This payment could not be verified by the receiver. This may occur if the payment was declined by the bank, the UTR reference was invalid, or the transaction was cancelled.
+                  This payment could not be verified by the receiver. This may occur if the payment was declined by the bank, the UTR reference was invalid, or credit was not received.
                 </p>
                 {transaction.notes && (
                   <p className="admin-notes">
@@ -219,12 +233,12 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
                 </div>
                 <div className="tx-summary-row">
                   <span>Date:</span>
-                  <span>{formatDate(transaction.createdAt || transaction.timestamp)}</span>
+                  <span>{formatDate(transaction.createdAt)}</span>
                 </div>
               </div>
 
               <p className="support-hint">
-                If your account was debited, please contact Abhijit with your bank transaction screenshot to resolve this manually.
+                If your account was debited, please contact Abhijit with your bank transaction reference to resolve this manually.
               </p>
             </div>
           )}

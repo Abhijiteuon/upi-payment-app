@@ -3,7 +3,7 @@ import Navbar from './components/Navbar';
 import StatusCheck from './components/StatusCheck';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
-import { addTransaction, getAdminSession, setAdminSession, updateTransactionStatus, submitToGoogleForm } from './services/storage';
+import { addTransaction, getAdminSession, setAdminSession, updateTransactionStatus } from './services/storage';
 import './index.css';
 
 function App() {
@@ -28,6 +28,7 @@ function App() {
   const [createdTransaction, setCreatedTransaction] = useState(null);
   const [isCopiedVpa, setIsCopiedVpa] = useState(false);
   const [isCopiedId, setIsCopiedId] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Initialize admin session check
   useEffect(() => {
@@ -43,14 +44,12 @@ function App() {
   const handleProceedToPay = async (e) => {
     e.preventDefault();
     if (formData.name && formData.amount && formData.purpose && formData.source) {
-      // 1. Create internal transaction record with unique Payment Verification ID
-      const tx = addTransaction(formData);
+      setIsSubmitting(true);
+      // Create internal transaction record in Supabase
+      const tx = await addTransaction(formData);
       setCreatedTransaction(tx);
       setActiveVerificationId(tx.verificationId);
-
-      // 2. Background Google Form submission with mapped Payment ID and UPI Ref ID
-      submitToGoogleForm(tx, 'pending');
-
+      setIsSubmitting(false);
       setPaymentStep('qr');
     }
   };
@@ -58,17 +57,15 @@ function App() {
   // Step 2 -> Step 3: User confirms payment made
   const handleConfirmPaid = async () => {
     if (createdTransaction) {
-      const updatedTx = {
-        ...createdTransaction,
-        ...formData,
-        verificationId: createdTransaction.verificationId
-      };
-
-      // Submit updated Google Form submission with the entered UPI refID
-      submitToGoogleForm(updatedTx, 'pending');
-
       if (formData.utr) {
-        updateTransactionStatus(createdTransaction.verificationId, 'pending', `User submitted UTR: ${formData.utr}`, formData.utr);
+        setIsSubmitting(true);
+        await updateTransactionStatus(
+          createdTransaction.verificationId, 
+          'pending', 
+          `User submitted UTR: ${formData.utr}`, 
+          formData.utr
+        );
+        setIsSubmitting(false);
       }
     }
     setPaymentStep('confirmed');
@@ -117,7 +114,12 @@ function App() {
     setCurrentView('pay');
   };
 
-  const upiLink = `upi://pay?pa=euonabhijit@okicici&pn=Abhijit%20Kumar&mc=0000&tr=TXN${Date.now()}&am=${formData.amount}&cu=INR&tn=${encodeURIComponent(formData.purpose || 'Payment to Abhijit')}`;
+  // Pre-fill transaction note with Verification ID so bank statement shows it clearly!
+  const noteContent = createdTransaction 
+    ? `${createdTransaction.verificationId} - ${formData.purpose || 'Payment'}`
+    : (formData.purpose || 'Payment to Abhijit');
+
+  const upiLink = `upi://pay?pa=euonabhijit@okicici&pn=Abhijit%20Kumar&mc=0000&tr=TXN${Date.now()}&am=${formData.amount}&cu=INR&tn=${encodeURIComponent(noteContent)}`;
 
   return (
     <div className="app-root">
@@ -239,8 +241,8 @@ function App() {
                       </div>
                     </div>
 
-                    <button type="submit" className="submit-btn">
-                      Proceed to Pay ₹{formData.amount || '0.00'}
+                    <button type="submit" className="submit-btn" disabled={isSubmitting}>
+                      {isSubmitting ? 'Creating Verification...' : `Proceed to Pay ₹${formData.amount || '0.00'}`}
                     </button>
                   </form>
                 </div>
@@ -284,9 +286,9 @@ function App() {
                     </a>
                   </div>
 
-                  {/* Optional UTR Input before confirmation */}
+                  {/* UTR Input before confirmation */}
                   <div className="utr-input-box">
-                    <label htmlFor="utr">Already paid? Enter 12-digit UPI Ref / UTR (Optional)</label>
+                    <label htmlFor="utr">Already paid? Enter 12-digit UPI Ref / UTR</label>
                     <input
                       type="text"
                       id="utr"
@@ -297,11 +299,14 @@ function App() {
                       value={formData.utr}
                       onChange={handleChange}
                     />
+                    <small style={{ color: '#94a3b8', fontSize: '0.8rem', display: 'block', marginTop: '0.3rem' }}>
+                      💡 Providing the UTR allows instant verification against bank records.
+                    </small>
                   </div>
                   
                   <div className="qr-footer-actions">
-                    <button onClick={handleConfirmPaid} className="submit-btn continue-pay-btn">
-                      ✓ I Have Made the Payment (Continue)
+                    <button onClick={handleConfirmPaid} className="submit-btn continue-pay-btn" disabled={isSubmitting}>
+                      {isSubmitting ? 'Submitting...' : '✓ I Have Made the Payment (Continue)'}
                     </button>
 
                     <button onClick={() => setPaymentStep('form')} className="back-btn">
@@ -336,10 +341,10 @@ function App() {
 
                   <div className="verification-info-alert">
                     <p>
-                      ⏱️ <strong>Verification Timeline:</strong> Verification is typically completed within <strong>3 hours to 2 days</strong>.
+                      ⚡ <strong>Live Status Updates:</strong> Once Abhijit verifies the payment, your status will update in real-time.
                     </p>
                     <p>
-                      Once Abhijit verifies the bank credits, you can check back anytime to download your official <strong>Payment Receipt</strong>.
+                      Click <strong>Track Status</strong> below to watch your receipt unlock live!
                     </p>
                   </div>
 
