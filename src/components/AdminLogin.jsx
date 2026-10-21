@@ -13,9 +13,9 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
     e.preventDefault();
     setError('');
 
-    const isValid = validateAdminCredentials(name, nickname, password);
-    if (isValid) {
-      setAdminSession(true);
+    const matchedAdmin = validateAdminCredentials(name, nickname, password);
+    if (matchedAdmin) {
+      setAdminSession(matchedAdmin);
       onLoginSuccess();
     } else {
       setError('Invalid admin credentials. Access denied.');

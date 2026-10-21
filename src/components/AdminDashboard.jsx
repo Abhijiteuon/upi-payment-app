@@ -5,6 +5,7 @@ import {
   clearAllTransactions,
   addTransaction, 
   setAdminSession, 
+  getAdminName,
   fetchRemoteTransactions, 
   updateRemoteStatus,
   subscribeToAllTransactions
@@ -186,7 +187,7 @@ function AdminDashboard({ onLogout }) {
             </span>
           </div>
           <h1 className="admin-title">Payment Verification Dashboard</h1>
-          <p className="admin-subtitle">Logged in as: <strong>Abhijit Kumar (Gopu)</strong></p>
+          <p className="admin-subtitle">Logged in as: <strong>{getAdminName()}</strong></p>
         </div>
         
         <div className="admin-top-actions">

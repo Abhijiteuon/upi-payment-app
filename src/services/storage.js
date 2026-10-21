@@ -496,24 +496,48 @@ export const subscribeToAllTransactions = (onChange) => {
 // ADMIN AUTHENTICATION
 // =========================================================================
 
+export const ADMIN_USERS = [
+  {
+    name: 'abhijit',
+    nickname: 'gopu',
+    password: 'Arya@2709',
+    displayName: 'Abhijit Kumar (Gopu)'
+  },
+  {
+    name: 'arya',
+    nickname: 'komal',
+    password: 'Imdbest@2711',
+    displayName: 'Arya (Komal)'
+  }
+];
+
 export const validateAdminCredentials = (name, nickname, password) => {
   const cleanName = (name || '').trim().toLowerCase();
   const cleanNickname = (nickname || '').trim().toLowerCase();
   const cleanPassword = (password || '').trim();
 
-  const isNameValid = cleanName === 'abhijit';
-  const isNicknameValid = cleanNickname === 'gopu';
-  const isPasswordValid = cleanPassword === 'Arya@2709';
+  const matched = ADMIN_USERS.find(
+    admin => admin.name === cleanName && admin.nickname === cleanNickname && admin.password === cleanPassword
+  );
 
-  return isNameValid && isNicknameValid && isPasswordValid;
+  return matched || null;
 };
 
-export const setAdminSession = (isValid) => {
-  if (isValid) {
+export const setAdminSession = (adminProfile) => {
+  if (adminProfile) {
     sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+    const displayName = typeof adminProfile === 'object' && adminProfile.displayName 
+      ? adminProfile.displayName 
+      : (typeof adminProfile === 'string' ? adminProfile : 'Admin');
+    sessionStorage.setItem('upi_admin_name', displayName);
   } else {
     sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    sessionStorage.removeItem('upi_admin_name');
   }
+};
+
+export const getAdminName = () => {
+  return sessionStorage.getItem('upi_admin_name') || 'Abhijit Kumar (Gopu)';
 };
 
 export const getAdminSession = () => {
