@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   getTransactions, 
   deleteTransaction, 
+  clearAllTransactions,
   addTransaction, 
   setAdminSession, 
   fetchRemoteTransactions, 
@@ -86,6 +87,16 @@ function AdminDashboard({ onLogout }) {
       setTransactions(updated);
       setIsLoading(false);
       showToast(`Transaction ${id} deleted.`);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (window.confirm('Are you sure you want to delete ALL entries? This action will remove all previous transactions from the dashboard.')) {
+      setIsLoading(true);
+      await clearAllTransactions();
+      setTransactions([]);
+      setIsLoading(false);
+      showToast('✓ All previous entries have been deleted.');
     }
   };
 
@@ -192,6 +203,9 @@ function AdminDashboard({ onLogout }) {
           </button>
           <button onClick={handleExportData} className="btn-action-secondary">
             💾 Export
+          </button>
+          <button onClick={handleClearAll} className="btn-action-danger" title="Delete all previous entries">
+            🗑️ Clear All
           </button>
           <button onClick={handleLogout} className="btn-action-danger">
             🚪 Logout

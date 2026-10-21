@@ -37,23 +37,8 @@ export const toClientTx = (row) => {
   };
 };
 
-// Initial Seed Data for first run or offline fallback
-const INITIAL_TRANSACTIONS = [
-  {
-    verificationId: 'VER-SAMPLE1',
-    name: 'Rahul Sharma',
-    email: 'rahul.sharma@example.com',
-    phone: '9876543210',
-    purpose: 'Freelance project completion Payment',
-    source: 'Individual',
-    amount: '2500.00',
-    utr: '410293847561',
-    status: 'successful',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    verifiedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    notes: 'Verified via ICICI statement'
-  }
-];
+// Initial Seed Data for first run or offline fallback (Clean slate by default)
+const INITIAL_TRANSACTIONS = [];
 
 // LocalStorage helpers with safe browser environment guards
 export const getTransactions = () => {
@@ -244,103 +229,28 @@ function parseGVizData(data) {
 }
 
 // =========================================================================
-// HYBRID DATA OPERATIONS (Supabase + Google Sheet Dual Sync)
+// HYBRID DATA OPERATIONS (Supabase Real-Time Database)
 // =========================================================================
 
-// Fetch all transactions, merging Supabase records with Google Sheet records
+// Fetch all transactions from Supabase live database (excluding deleted)
 export const fetchRemoteTransactions = async () => {
-  const localList = getTransactions();
-  const resultMap = new Map();
-
-  // 1. Fetch from Google Sheet GViz API
-  try {
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/1zfpeMPKzwkTGeGsGRI69ya6NW6y_N7NFsa3QQY1XIh8/gviz/tq?tqx=out:json&gid=450698937&t=${Date.now()}`;
-    const res = await fetch(gvizUrl);
-    const text = await res.text();
-    if (!text.includes('<!DOCTYPE') && text.includes('{')) {
-      const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
-      const sheetTxs = parseGVizData(JSON.parse(jsonStr));
-      sheetTxs.forEach(tx => {
-        const k = (tx.verificationId || '').trim().toUpperCase();
-        if (k) resultMap.set(k, tx);
-      });
-    }
-  } catch (err) {
-    console.warn('Google Sheet fetch error:', err);
-  }
-
-  // 2. Fetch from Supabase (Supabase overrides and provides real-time state)
   try {
     const { data: sbData, error } = await supabase
       .from('transactions')
       .select('*')
+      .neq('status', 'deleted')
       .order('created_at', { ascending: false });
 
     if (!error && Array.isArray(sbData)) {
-      sbData.forEach(row => {
-        const clientTx = toClientTx(row);
-        const k = (clientTx.verificationId || '').trim().toUpperCase();
-        if (k) {
-          const existing = resultMap.get(k);
-          if (existing) {
-            // Keep the non-pending status if available
-            const bestStatus = clientTx.status !== 'pending' ? clientTx.status : existing.status;
-            resultMap.set(k, {
-              ...existing,
-              ...clientTx,
-              status: bestStatus,
-              utr: clientTx.utr || existing.utr,
-              verifiedAt: clientTx.verifiedAt || existing.verifiedAt
-            });
-          } else {
-            resultMap.set(k, clientTx);
-          }
-        }
-      });
-
-      // Background auto-sync: Upload any missing sheet records into Supabase
-      const missingInSupabase = Array.from(resultMap.values()).filter(tx => {
-        return !sbData.some(r => r.verification_id === tx.verificationId);
-      });
-
-      if (missingInSupabase.length > 0) {
-        const toInsert = missingInSupabase.map(t => ({
-          verification_id: t.verificationId,
-          name: t.name,
-          email: t.email,
-          phone: t.phone,
-          purpose: t.purpose,
-          source: t.source,
-          amount: parseFloat(t.amount) || 0,
-          utr: t.utr || null,
-          status: t.status || 'pending',
-          notes: t.notes || '',
-          verified_at: t.verifiedAt || null
-        }));
-        supabase.from('transactions').insert(toInsert).then(() => {}).catch(() => {});
-      }
+      const clientTxs = sbData.map(toClientTx);
+      saveTransactions(clientTxs);
+      return { success: true, source: 'supabase', transactions: clientTxs };
     }
   } catch (err) {
     console.warn('Supabase fetch error:', err);
   }
 
-  // 3. Merge with any local offline transactions
-  localList.forEach(localTx => {
-    const k = (localTx.verificationId || '').trim().toUpperCase();
-    if (k && !resultMap.has(k)) {
-      resultMap.set(k, localTx);
-    }
-  });
-
-  const merged = Array.from(resultMap.values()).sort((a, b) => {
-    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-  });
-
-  if (merged.length > 0) {
-    saveTransactions(merged);
-    return { success: true, source: 'hybrid', transactions: merged };
-  }
-
+  const localList = getTransactions().filter(t => t.status !== 'deleted');
   return { success: false, source: 'local', transactions: localList };
 };
 
@@ -408,12 +318,13 @@ export const fetchRemoteStatusById = async (verificationId) => {
   const query = (verificationId || '').trim().toUpperCase();
   if (!query) return null;
 
-  // 1. Check Supabase
+  // 1. Check Supabase (excluding deleted)
   try {
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
       .eq('verification_id', query)
+      .neq('status', 'deleted')
       .maybeSingle();
 
     if (!error && data) {
@@ -424,23 +335,8 @@ export const fetchRemoteStatusById = async (verificationId) => {
     console.warn('Supabase fetchRemoteStatusById error:', err);
   }
 
-  // 2. Fallback to Google Sheet GViz API
-  try {
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/1zfpeMPKzwkTGeGsGRI69ya6NW6y_N7NFsa3QQY1XIh8/gviz/tq?tqx=out:json&gid=450698937&t=${Date.now()}`;
-    const res = await fetch(gvizUrl);
-    const text = await res.text();
-    if (!text.includes('<!DOCTYPE') && text.includes('{')) {
-      const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
-      const parsedTxs = parseGVizData(JSON.parse(jsonStr));
-      const match = parsedTxs.find(t => (t.verificationId || '').trim().toUpperCase() === query);
-      if (match) return match;
-    }
-  } catch (err) {
-    console.warn('GViz fallback error:', err);
-  }
-
-  // 3. Fallback to local cache
-  const local = getTransactions();
+  // 2. Fallback to local cache (excluding deleted)
+  const local = getTransactions().filter(t => t.status !== 'deleted');
   return local.find(t => (t.verificationId || '').trim().toUpperCase() === query) || null;
 };
 
@@ -516,7 +412,7 @@ export const updateRemoteStatus = async (verificationId, status, notes = '', utr
 
 export const updateTransactionStatus = updateRemoteStatus;
 
-// Delete transaction
+// Delete single transaction (marks as deleted in Supabase and clears from local cache)
 export const deleteTransaction = async (verificationId) => {
   const query = (verificationId || '').trim().toUpperCase();
   const localList = getTransactions();
@@ -524,12 +420,23 @@ export const deleteTransaction = async (verificationId) => {
   saveTransactions(filtered);
 
   try {
-    await supabase.from('transactions').delete().eq('verification_id', query);
+    await supabase.from('transactions').update({ status: 'deleted' }).eq('verification_id', query);
   } catch (err) {
     console.error('Error deleting from Supabase:', err);
   }
 
   return filtered;
+};
+
+// Clear all transactions (marks all active rows as deleted in Supabase and clears local cache)
+export const clearAllTransactions = async () => {
+  saveTransactions([]);
+  try {
+    await supabase.from('transactions').update({ status: 'deleted' }).neq('status', 'deleted');
+  } catch (err) {
+    console.error('Error clearing all transactions from Supabase:', err);
+  }
+  return [];
 };
 
 // =========================================================================
