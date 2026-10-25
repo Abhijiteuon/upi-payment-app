@@ -120,11 +120,16 @@ body {
   user-select: none;
 }
 
-.nav-logo-img {
+.nav-brand-icon-box {
   width: 30px;
   height: 30px;
-  object-fit: contain;
-  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
 }
 
 .nav-brand-text {
