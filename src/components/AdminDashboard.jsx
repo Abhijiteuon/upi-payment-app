@@ -8,7 +8,8 @@ import {
   fetchRemoteTransactions, 
   updateRemoteStatus,
   subscribeToAllTransactions,
-  logoutAdmin
+  logoutAdmin,
+  createNewAdminFromPortal
 } from '../services/storage';
 import { validateUTR } from '../services/security';
 import { 
@@ -20,7 +21,8 @@ import {
   IconCheck, 
   IconAlertCircle, 
   IconClock, 
-  IconCreditCard
+  IconCreditCard,
+  IconLock
 } from './Icons';
 
 function AdminDashboard({ onLogout }) {
@@ -37,6 +39,13 @@ function AdminDashboard({ onLogout }) {
   const [checkUtr, setCheckUtr] = useState(false);
   const [checkTime, setCheckTime] = useState(false);
   const [adminNote, setAdminNote] = useState('');
+
+  // Admin Management Modal (Protected inside Admin Portal only)
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [adminModalError, setAdminModalError] = useState('');
+  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
 
   // Form for manual entry
   const [manualForm, setManualForm] = useState({
@@ -164,6 +173,24 @@ function AdminDashboard({ onLogout }) {
     showToast(`Created record: ${created.verificationId}`);
   };
 
+  const handleCreateAdminSubmit = async (e) => {
+    e.preventDefault();
+    setAdminModalError('');
+    setIsCreatingAdmin(true);
+
+    const res = await createNewAdminFromPortal(newAdminEmail, newAdminPassword);
+    setIsCreatingAdmin(false);
+
+    if (res.success) {
+      showToast(`Admin ${newAdminEmail} provisioned successfully!`);
+      setShowAdminModal(false);
+      setNewAdminEmail('');
+      setNewAdminPassword('');
+    } else {
+      setAdminModalError(res.error || 'Failed to provision administrator.');
+    }
+  };
+
   const handleExportData = () => {
     const jsonStr = JSON.stringify(transactions, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -274,6 +301,10 @@ function AdminDashboard({ onLogout }) {
           </button>
           <button onClick={() => setShowAddModal(true)} className="dashboard-btn" title="Create manual transaction">
             <span>+ Add Entry</span>
+          </button>
+          <button onClick={() => setShowAdminModal(true)} className="dashboard-btn" title="Add new authorized administrator">
+            <IconLock size={13} className="text-emerald" />
+            <span>+ Add Admin</span>
           </button>
           <button onClick={handleExportData} className="dashboard-btn" title="Export as JSON">
             <IconDownload size={14} />
@@ -572,6 +603,70 @@ function AdminDashboard({ onLogout }) {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE NEW ADMIN MODAL (Accessible only by logged-in Admins) */}
+      {showAdminModal && (
+        <div className="modal-backdrop" onClick={() => setShowAdminModal(false)}>
+          <div className="modal-dialog-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-panel-header">
+              <div className="modal-header-icon">
+                <IconLock size={20} className="text-emerald" />
+              </div>
+              <div>
+                <h3 className="modal-title">Authorize New Administrator</h3>
+                <p className="modal-subtitle">Provision credentials for a new authorized co-admin</p>
+              </div>
+              <button className="modal-close-action" onClick={() => setShowAdminModal(false)}>&times;</button>
+            </div>
+
+            <form onSubmit={handleCreateAdminSubmit} className="modal-panel-body">
+              {adminModalError && (
+                <div className="status-alert alert-error fade-in" style={{ marginBottom: '1rem' }}>
+                  <IconAlertCircle size={16} className="alert-icon-svg" />
+                  <div className="alert-body">
+                    <p>{adminModalError}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label className="field-label">New Admin Email Address *</label>
+                <input
+                  type="email"
+                  className="form-control"
+                  placeholder="e.g. arya@codeed.in"
+                  value={newAdminEmail}
+                  onChange={(e) => setNewAdminEmail(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="field-label">Master Password (minimum 6 characters) *</label>
+                <input
+                  type="password"
+                  className="form-control"
+                  placeholder="Enter initial password"
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="modal-cta-row">
+                <button type="submit" className="primary-action-btn modal-confirm-btn" disabled={isCreatingAdmin}>
+                  <IconShieldCheck size={16} />
+                  <span>{isCreatingAdmin ? 'Provisioning...' : 'Authorize & Create Admin'}</span>
+                </button>
+                <button type="button" className="ghost-back-btn" onClick={() => setShowAdminModal(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

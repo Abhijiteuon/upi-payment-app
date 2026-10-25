@@ -571,10 +571,10 @@ export const loginAdminWithSupabase = async (email, password) => {
 };
 
 /**
- * Register a new Admin account in Supabase Auth (for initial dashboard setup)
+ * Create a new authorized Administrator (Must be called by an authenticated Admin from inside the portal)
  */
-export const registerAdminWithSupabase = async (email, password) => {
-  const cleanEmail = (email || '').trim();
+export const createNewAdminFromPortal = async (email, password) => {
+  const cleanEmail = (email || '').trim().toLowerCase();
   const cleanPassword = (password || '').trim();
 
   if (!cleanEmail || !cleanPassword) {
@@ -586,6 +586,7 @@ export const registerAdminWithSupabase = async (email, password) => {
   }
 
   try {
+    // 1. Create user in Supabase
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password: cleanPassword
@@ -595,20 +596,21 @@ export const registerAdminWithSupabase = async (email, password) => {
       return { success: false, error: error.message };
     }
 
-    if (data?.session) {
-      sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
-      sessionStorage.setItem('upi_admin_name', data.user?.email || 'Admin');
+    // 2. Attempt to auto-confirm new admin via RPC (if configured)
+    try {
+      await supabase.rpc('confirm_admin_user', { user_email: cleanEmail });
+    } catch {
+      // non-blocking
     }
 
     return { 
       success: true, 
-      user: data.user, 
-      session: data.session,
-      requiresEmailConfirmation: !data?.session
+      user: data?.user, 
+      message: `Admin account for ${cleanEmail} created successfully.`
     };
   } catch (err) {
-    console.error('Supabase register error:', err);
-    return { success: false, error: err.message || 'Registration failed.' };
+    console.error('Create admin error:', err);
+    return { success: false, error: err.message || 'Failed to create administrator.' };
   }
 };
 

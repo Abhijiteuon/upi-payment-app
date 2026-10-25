@@ -149,3 +149,23 @@ ON public.transaction_audit_logs
 FOR INSERT
 TO authenticated, anon
 WITH CHECK (true);
+
+-- 6. RPC Function: Authenticated Admins can activate invited co-admins
+CREATE OR REPLACE FUNCTION public.confirm_admin_user(user_email TEXT)
+RETURNS BOOLEAN
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+    -- Strict security guard: Only authenticated admins can invoke this
+    IF auth.role() != 'authenticated' THEN
+        RAISE EXCEPTION 'Access denied: Only active administrators can activate admin accounts.';
+    END IF;
+
+    UPDATE auth.users
+    SET email_confirmed_at = timezone('utc', now())
+    WHERE email = LOWER(TRIM(user_email));
+
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
