@@ -284,9 +284,6 @@ function App() {
                     <h1 className="main-title">
                       Initiate Payment
                     </h1>
-                    <p className="sub-title">
-                      CLOAK (Credential-less Link for Online Auth & Keys) — Generate a verified, tamper-proof transaction session
-                    </p>
                   </div>
 
                   {formError && (
