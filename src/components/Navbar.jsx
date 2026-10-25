@@ -1,4 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { 
+  IconCreditCard, 
+  IconSearch, 
+  IconExternalLink, 
+  IconLock, 
+  IconShieldCheck,
+  IconArrowRight 
+} from './Icons';
 
 function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -21,35 +29,107 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
 
   return (
     <>
-      <nav className="navbar">
+      <header className="navbar">
         <div className="nav-container">
+          {/* Brand Logo */}
           <div className="nav-logo" onClick={() => handleNavClick('pay')}>
             <img src="/codeed-icon.png" alt="codeED" className="nav-logo-img" />
-            <span className="logo-text">codeED</span>
+            <div className="nav-brand-text">
+              <span className="logo-text">codeED</span>
+              <span className="logo-badge">PAY</span>
+            </div>
           </div>
 
-          <button 
-            className={`hamburger-btn ${isOpen ? 'active' : ''}`}
-            onClick={() => setIsOpen(!isOpen)}
-            aria-label="Toggle navigation menu"
-            aria-expanded={isOpen}
-          >
-            <span className="bar"></span>
-            <span className="bar"></span>
-            <span className="bar"></span>
-          </button>
+          {/* Desktop Navigation Links */}
+          <nav className="desktop-nav-links">
+            <button 
+              className={`desktop-nav-btn ${currentView === 'pay' ? 'active' : ''}`}
+              onClick={() => handleNavClick('pay')}
+            >
+              <IconCreditCard size={15} />
+              <span>Make Payment</span>
+            </button>
+
+            <button 
+              className={`desktop-nav-btn ${currentView === 'status' ? 'active' : ''}`}
+              onClick={() => handleNavClick('status')}
+            >
+              <IconSearch size={15} />
+              <span>Track Status</span>
+            </button>
+
+            <a 
+              href="https://abhijitportfolio-five.vercel.app/" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="desktop-nav-btn external"
+            >
+              <span>Creator</span>
+              <IconExternalLink size={13} />
+            </a>
+
+            <div className="nav-vertical-divider"></div>
+
+            {isAdminLoggedIn ? (
+              <div className="admin-nav-group">
+                <button 
+                  className={`desktop-nav-btn admin-active ${currentView === 'admin' ? 'active' : ''}`}
+                  onClick={() => handleNavClick('admin')}
+                >
+                  <span className="admin-status-dot"></span>
+                  <span>Dashboard</span>
+                </button>
+                <button 
+                  className="nav-logout-btn"
+                  onClick={onAdminLogout}
+                  title="Sign out of Admin session"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button 
+                className={`desktop-nav-btn admin-portal-btn ${currentView === 'admin' ? 'active' : ''}`}
+                onClick={() => handleNavClick('admin')}
+              >
+                <IconLock size={13} />
+                <span>Admin</span>
+              </button>
+            )}
+          </nav>
+
+          {/* Mobile Right Controls: Trust Pill + Hamburger */}
+          <div className="mobile-nav-controls">
+            <div className="nav-trust-pill mobile-hide">
+              <IconShieldCheck size={13} className="text-emerald" />
+              <span>NPCI Encrypted</span>
+            </div>
+
+            <button 
+              className={`hamburger-btn ${isOpen ? 'active' : ''}`}
+              onClick={() => setIsOpen(!isOpen)}
+              aria-label="Toggle navigation menu"
+              aria-expanded={isOpen}
+            >
+              <span className="bar"></span>
+              <span className="bar"></span>
+            </button>
+          </div>
         </div>
-      </nav>
+      </header>
 
       {/* Backdrop overlay */}
       {isOpen && (
         <div className="nav-backdrop" onClick={() => setIsOpen(false)} />
       )}
 
-      {/* Slide-out Menu Drawer */}
-      <div className={`nav-drawer ${isOpen ? 'open' : ''}`}>
+      {/* Slide-out Menu Drawer for Mobile */}
+      <aside className={`nav-drawer ${isOpen ? 'open' : ''}`}>
         <div className="drawer-header">
-          <h3>Menu</h3>
+          <div className="drawer-brand">
+            <img src="/codeed-icon.png" alt="codeED" className="nav-logo-img" />
+            <span className="logo-text">codeED Pay</span>
+          </div>
           <button 
             className="drawer-close-btn"
             onClick={() => setIsOpen(false)}
@@ -59,75 +139,83 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
           </button>
         </div>
 
-        <ul className="drawer-links">
-          <li>
-            <button 
-              className={`drawer-link-btn ${currentView === 'pay' ? 'active' : ''}`}
-              onClick={() => handleNavClick('pay')}
-            >
-              <span className="link-icon">💳</span>
-              <span>Make a Payment</span>
-            </button>
-          </li>
-
-          <li>
-            <button 
-              className={`drawer-link-btn ${currentView === 'status' ? 'active' : ''}`}
-              onClick={() => handleNavClick('status')}
-            >
-              <span className="link-icon">🔍</span>
-              <span>Check Payment Status</span>
-            </button>
-          </li>
-
-          <li>
-            <a 
-              href="https://abhijitportfolio-five.vercel.app/" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="drawer-link-btn external-link"
-              onClick={() => setIsOpen(false)}
-            >
-              <span className="link-icon">👨‍💻</span>
-              <span>Know About the Creator</span>
-              <span className="external-arrow">↗</span>
-            </a>
-          </li>
-
-          <li className="drawer-divider"></li>
-
-          <li>
-            <button 
-              className={`drawer-link-btn admin-link ${currentView === 'admin' ? 'active' : ''}`}
-              onClick={() => handleNavClick('admin')}
-            >
-              <span className="link-icon">🔒</span>
-              <span>Admin Portal</span>
-              {isAdminLoggedIn && <span className="auth-indicator">Active</span>}
-            </button>
-          </li>
-
-          {isAdminLoggedIn && (
+        <div className="drawer-body">
+          <div className="drawer-label">NAVIGATION</div>
+          <ul className="drawer-links">
             <li>
               <button 
-                className="drawer-link-btn logout-link"
-                onClick={() => {
-                  setIsOpen(false);
-                  onAdminLogout();
-                }}
+                className={`drawer-link-btn ${currentView === 'pay' ? 'active' : ''}`}
+                onClick={() => handleNavClick('pay')}
               >
-                <span className="link-icon">🚪</span>
-                <span>Logout Admin</span>
+                <IconCreditCard size={18} className="link-icon" />
+                <span>Make a Payment</span>
+                <IconArrowRight size={14} className="drawer-arrow" />
               </button>
             </li>
-          )}
-        </ul>
+
+            <li>
+              <button 
+                className={`drawer-link-btn ${currentView === 'status' ? 'active' : ''}`}
+                onClick={() => handleNavClick('status')}
+              >
+                <IconSearch size={18} className="link-icon" />
+                <span>Track Payment Status</span>
+                <IconArrowRight size={14} className="drawer-arrow" />
+              </button>
+            </li>
+
+            <li>
+              <a 
+                href="https://abhijitportfolio-five.vercel.app/" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="drawer-link-btn"
+                onClick={() => setIsOpen(false)}
+              >
+                <span className="link-icon">↗</span>
+                <span>Know About the Creator</span>
+                <IconExternalLink size={14} className="drawer-arrow" />
+              </a>
+            </li>
+          </ul>
+
+          <div className="drawer-divider"></div>
+
+          <div className="drawer-label">SECURITY & ACCESS</div>
+          <ul className="drawer-links">
+            <li>
+              <button 
+                className={`drawer-link-btn admin-link ${currentView === 'admin' ? 'active' : ''}`}
+                onClick={() => handleNavClick('admin')}
+              >
+                <IconLock size={18} className="link-icon" />
+                <span>{isAdminLoggedIn ? 'Verification Dashboard' : 'Admin Security Portal'}</span>
+              </button>
+            </li>
+
+            {isAdminLoggedIn && (
+              <li>
+                <button 
+                  className="drawer-link-btn drawer-logout-btn"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onAdminLogout();
+                  }}
+                >
+                  <span>Sign Out</span>
+                </button>
+              </li>
+            )}
+          </ul>
+        </div>
 
         <div className="drawer-footer">
-          <p>Secure UPI Payment System</p>
-          <small>Verified by NPCI Standards</small>
+          <div className="drawer-security-note">
+            <IconShieldCheck size={14} className="text-emerald" />
+            <span>256-bit Encrypted • Direct ICICI UPI</span>
+          </div>
         </div>
-      </div>
+      </aside>
     </>
   );
 }

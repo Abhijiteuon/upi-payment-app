@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { fetchRemoteStatusById, subscribeToTransaction } from '../services/storage';
 import PaymentReceipt from './PaymentReceipt';
+import { 
+  IconSearch, 
+  IconClock, 
+  IconAlertCircle, 
+  IconShieldCheck,
+  IconCreditCard
+} from './Icons';
 
 function StatusCheck({ initialVerificationId = '', onBackToPay }) {
   const [queryId, setQueryId] = useState(initialVerificationId);
@@ -28,11 +35,11 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
         setTransaction(result);
       } else {
         setTransaction(null);
-        setErrorMsg(`No transaction found for Verification ID: "${id}". Please verify the ID or check if it was entered correctly.`);
+        setErrorMsg(`No payment record located for Verification ID: "${id}". Please confirm the ID syntax (e.g. VER-XXXXXX).`);
       }
     } catch (err) {
       console.error('Error looking up transaction', err);
-      setErrorMsg('Error querying payment status. Please try again.');
+      setErrorMsg('Unable to query payment status. Please verify your connection.');
     } finally {
       setIsSearching(false);
     }
@@ -82,45 +89,64 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
   };
 
   return (
-    <div className="fade-in">
-      <div className="header">
-        <h1>Track Payment Status</h1>
-        <p>Check the real-time verification status of your UPI payment</p>
+    <div className="status-check-container fade-in">
+      <div className="card-header-block text-center">
+        <div className="header-meta-pill">
+          <IconSearch size={14} className="text-sky" />
+          <span>REAL-TIME AUDIT LOOKUP</span>
+        </div>
+        <h1 className="main-title">Track Payment Status</h1>
+        <p className="sub-title">
+          Query the live settlement status or retrieve an official verified payment receipt
+        </p>
       </div>
 
-      <form onSubmit={handleSearch} className="search-form">
-        <div className="form-group">
-          <label htmlFor="verify-id">Enter Verification ID</label>
-          <div className="search-input-group">
-            <input
-              type="text"
-              id="verify-id"
-              className="form-control mono-input"
-              placeholder="e.g. VER-8X29KP"
-              value={queryId}
-              onChange={(e) => setQueryId(e.target.value.toUpperCase())}
-              required
-            />
-            <button type="submit" className="search-btn" disabled={isSearching}>
-              {isSearching ? 'Checking...' : 'Check Status'}
+      <form onSubmit={handleSearch} className="search-form-card">
+        <div className="search-field-wrapper">
+          <IconSearch size={18} className="search-input-icon" />
+          <input
+            type="text"
+            id="verify-id"
+            className="search-input-field mono"
+            placeholder="Enter Verification ID (e.g. VER-8X29KP)"
+            value={queryId}
+            onChange={(e) => setQueryId(e.target.value.toUpperCase())}
+            required
+            autoComplete="off"
+          />
+          {queryId && (
+            <button 
+              type="button" 
+              className="search-clear-btn"
+              onClick={() => {
+                setQueryId('');
+                setSearched(false);
+                setTransaction(null);
+              }}
+            >
+              &times;
             </button>
-          </div>
+          )}
+          <button type="submit" className="search-submit-btn" disabled={isSearching}>
+            {isSearching ? 'Searching...' : 'Check Status'}
+          </button>
         </div>
       </form>
 
-      {/* Loading state */}
+      {/* Loading Indicator */}
       {isSearching && (
-        <div className="status-loading fade-in" style={{ textAlign: 'center', padding: '1.5rem', color: '#a5b4fc' }}>
-          <p>⏳ Fetching latest payment verification from database...</p>
+        <div className="status-loading-panel fade-in">
+          <div className="spinner-ring"></div>
+          <p>Querying verified ledger and Supabase database...</p>
         </div>
       )}
 
       {/* Error / Not Found */}
       {!isSearching && searched && errorMsg && (
-        <div className="status-alert alert-error fade-in">
-          <div className="alert-icon">⚠️</div>
+        <div className="status-alert alert-error fade-in" style={{ marginTop: '1.5rem' }}>
+          <IconAlertCircle size={20} className="alert-icon-svg" />
           <div className="alert-body">
-            <h4>Transaction Not Found</h4>
+            <h4>Record Not Found</h4>
             <p>{errorMsg}</p>
           </div>
         </div>
@@ -128,7 +154,9 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
 
       {/* Found Transaction Results */}
       {!isSearching && searched && transaction && (
-        <div className="status-result fade-in">
+        <div className="status-result-area fade-in">
+          
+          {/* SUCCESSFUL: OFFICIAL RECEIPT */}
           {transaction.status === 'successful' && (
             <PaymentReceipt 
               transaction={transaction} 
@@ -139,115 +167,118 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
             />
           )}
 
+          {/* PENDING: UNDER VERIFICATION */}
           {(!transaction.status || transaction.status === 'pending') && (
-            <div className="status-card pending-card">
-              <div className="status-card-header">
-                <div className="status-icon-badge badge-pending">
-                  <span className="spinning-icon">⏳</span>
+            <div className="status-pending-card">
+              <div className="pending-card-header">
+                <div className="pulsing-clock-badge">
+                  <IconClock size={24} className="text-amber" />
                 </div>
-                <div>
-                  <span className="status-tag tag-pending">Verification Under Progress</span>
+                <div className="pending-header-info">
+                  <div className="pending-meta-tag">
+                    <span className="pulsing-amber-dot"></span>
+                    <span>CREDIT RECONCILIATION IN PROGRESS</span>
+                  </div>
                   <h3>Payment Under Review</h3>
                 </div>
               </div>
 
-              <div className="status-notice">
+              <div className="pending-notice-box">
                 <p>
-                  Your payment verification is currently <strong>under progress</strong>. The receiver (Abhijit) reconciles incoming payments against bank statements.
+                  Your transaction has been submitted. The receiver (Abhijit) cross-checks all credits against bank statements before generating the final tax receipt.
                 </p>
-                <div className="timeline-hint" style={{ marginTop: '0.5rem', color: '#38bdf8' }}>
-                  ⚡ <em>This screen will automatically unlock your receipt in real time once verified — no refresh needed!</em>
+                <div className="live-socket-hint">
+                  <IconShieldCheck size={14} className="text-sky" />
+                  <span><strong>Live Auto-Unlock:</strong> This page will automatically update and display your receipt the moment credit is approved. No refresh needed.</span>
                 </div>
               </div>
 
-              <div className="tx-summary-table">
-                <div className="tx-summary-row">
-                  <span>Verification ID:</span>
-                  <strong className="mono">{transaction.verificationId}</strong>
+              <div className="pending-summary-grid">
+                <div className="summary-cell">
+                  <span className="summary-label">VERIFICATION ID</span>
+                  <span className="summary-val mono font-semibold">{transaction.verificationId}</span>
                 </div>
-                <div className="tx-summary-row">
-                  <span>Payer Name:</span>
-                  <strong>{transaction.name}</strong>
-                </div>
-                <div className="tx-summary-row">
-                  <span>Amount:</span>
-                  <strong className="text-highlight">₹{transaction.amount}</strong>
-                </div>
-                <div className="tx-summary-row">
-                  <span>Purpose:</span>
-                  <span>{transaction.purpose}</span>
-                </div>
-                {transaction.utr && (
-                  <div className="tx-summary-row">
-                    <span>Submitted UTR:</span>
-                    <span className="mono">{transaction.utr}</span>
-                  </div>
-                )}
-                <div className="tx-summary-row">
-                  <span>Submitted On:</span>
-                  <span>{formatDate(transaction.createdAt)}</span>
-                </div>
-              </div>
 
-              <div className="status-tip">
-                💡 <em>Tip: You can bookmark this page or keep your Verification ID handy. Once marked successful by the admin, your official payment receipt will appear right here.</em>
+                <div className="summary-cell">
+                  <span className="summary-label">PAYER NAME</span>
+                  <span className="summary-val">{transaction.name}</span>
+                </div>
+
+                <div className="summary-cell">
+                  <span className="summary-label">AMOUNT DUE</span>
+                  <span className="summary-val font-semibold text-sky">₹{Number(transaction.amount).toLocaleString('en-IN')}</span>
+                </div>
+
+                <div className="summary-cell">
+                  <span className="summary-label">PURPOSE</span>
+                  <span className="summary-val">{transaction.purpose}</span>
+                </div>
+
+                <div className="summary-cell">
+                  <span className="summary-label">SUBMITTED UTR</span>
+                  <span className="summary-val mono">{transaction.utr || 'Awaiting UTR submission'}</span>
+                </div>
+
+                <div className="summary-cell">
+                  <span className="summary-label">SUBMISSION TIME</span>
+                  <span className="summary-val">{formatDate(transaction.createdAt)}</span>
+                </div>
               </div>
             </div>
           )}
 
+          {/* FAILED STATUS */}
           {transaction.status === 'failed' && (
-            <div className="status-card failed-card">
-              <div className="status-card-header">
-                <div className="status-icon-badge badge-failed">
-                  <span>❌</span>
+            <div className="status-failed-card">
+              <div className="failed-card-header">
+                <div className="failed-icon-badge">
+                  <IconAlertCircle size={24} className="text-red" />
                 </div>
                 <div>
-                  <span className="status-tag tag-failed">Payment Failed</span>
+                  <div className="failed-meta-tag">TRANSACTION DECLINED</div>
                   <h3>Verification Unsuccessful</h3>
                 </div>
               </div>
 
-              <div className="status-notice failed-notice">
+              <div className="failed-notice-box">
                 <p>
-                  This payment could not be verified by the receiver. This may occur if the payment was declined by the bank, the UTR reference was invalid, or credit was not received.
+                  This payment could not be verified against the receiver's bank statement. Common reasons include bank transaction timeout, incorrect 12-digit UTR, or credit reversal.
                 </p>
                 {transaction.notes && (
-                  <p className="admin-notes">
-                    <strong>Admin Note:</strong> {transaction.notes}
-                  </p>
+                  <div className="failed-reason-text">
+                    <strong>Receiver Note:</strong> {transaction.notes}
+                  </div>
                 )}
               </div>
 
-              <div className="tx-summary-table">
-                <div className="tx-summary-row">
-                  <span>Verification ID:</span>
-                  <strong className="mono">{transaction.verificationId}</strong>
+              <div className="pending-summary-grid">
+                <div className="summary-cell">
+                  <span className="summary-label">VERIFICATION ID</span>
+                  <span className="summary-val mono">{transaction.verificationId}</span>
                 </div>
-                <div className="tx-summary-row">
-                  <span>Payer Name:</span>
-                  <strong>{transaction.name}</strong>
+                <div className="summary-cell">
+                  <span className="summary-label">AMOUNT</span>
+                  <span className="summary-val">₹{transaction.amount}</span>
                 </div>
-                <div className="tx-summary-row">
-                  <span>Amount:</span>
-                  <strong>₹{transaction.amount}</strong>
+                <div className="summary-cell">
+                  <span className="summary-label">PAYER NAME</span>
+                  <span className="summary-val">{transaction.name}</span>
                 </div>
-                <div className="tx-summary-row">
-                  <span>Date:</span>
-                  <span>{formatDate(transaction.createdAt)}</span>
+                <div className="summary-cell">
+                  <span className="summary-label">DATE</span>
+                  <span className="summary-val">{formatDate(transaction.createdAt)}</span>
                 </div>
               </div>
-
-              <p className="support-hint">
-                If your account was debited, please contact Abhijit with your bank transaction reference to resolve this manually.
-              </p>
             </div>
           )}
         </div>
       )}
 
-      <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-        <button onClick={onBackToPay} className="back-btn">
-          ← Make Another Payment
+      {/* Back CTA */}
+      <div className="status-footer-action">
+        <button onClick={onBackToPay} className="ghost-back-btn">
+          <IconCreditCard size={16} />
+          <span>Make Another Payment</span>
         </button>
       </div>
     </div>

@@ -4,13 +4,24 @@ import {
   deleteTransaction, 
   clearAllTransactions, 
   addTransaction, 
-  getAdminName,
+  getAdminName, 
   fetchRemoteTransactions, 
   updateRemoteStatus,
   subscribeToAllTransactions,
   logoutAdmin
 } from '../services/storage';
 import { validateUTR } from '../services/security';
+import { 
+  IconShieldCheck, 
+  IconRefresh, 
+  IconDownload, 
+  IconTrash, 
+  IconSearch, 
+  IconCheck, 
+  IconAlertCircle, 
+  IconClock, 
+  IconCreditCard
+} from './Icons';
 
 function AdminDashboard({ onLogout }) {
   const [transactions, setTransactions] = useState([]);
@@ -46,10 +57,10 @@ function AdminDashboard({ onLogout }) {
     const result = await fetchRemoteTransactions();
     if (result.success && Array.isArray(result.transactions)) {
       setTransactions(result.transactions);
-      if (showToastMsg) showToast('✓ Synced with Supabase Live Database!');
+      if (showToastMsg) showToast('Synced with live database');
     } else {
       if (showToastMsg) {
-        showToast('⚠️ Could not sync with Supabase. Showing cached data.');
+        showToast('Using local cached ledger records');
       }
     }
     setIsLoading(false);
@@ -58,7 +69,6 @@ function AdminDashboard({ onLogout }) {
   useEffect(() => {
     loadData();
 
-    // Subscribe to live changes in Supabase (new payments, UTR updates from any device)
     const unsubscribe = subscribeToAllTransactions(() => {
       loadData(false);
     });
@@ -70,7 +80,7 @@ function AdminDashboard({ onLogout }) {
 
   const showToast = (msg) => {
     setNotification(msg);
-    setTimeout(() => setNotification(''), 4000);
+    setTimeout(() => setNotification(''), 3500);
   };
 
   // Open 3-Point Verification Modal before marking successful
@@ -95,14 +105,14 @@ function AdminDashboard({ onLogout }) {
     
     setIsLoading(false);
     setVerifyingTx(null);
-    showToast(`✓ Marked "SUCCESSFUL" for ID ${verifyingTx.verificationId}`);
+    showToast(`Marked ${verifyingTx.verificationId} as Settled`);
   };
 
   const handleStatusChange = async (id, newStatus) => {
     let customNote = '';
     if (newStatus === 'failed') {
-      customNote = window.prompt('Enter reason for marking payment as failed (or leave empty):', 'Invalid UTR / Credit not received in bank statement');
-      if (customNote === null) return; // User cancelled
+      customNote = window.prompt('Reason for declining payment (e.g. Invalid UTR / Credit not received in bank):', 'Invalid UTR / Credit not received in bank statement');
+      if (customNote === null) return;
     }
     
     setIsLoading(true);
@@ -111,26 +121,26 @@ function AdminDashboard({ onLogout }) {
       setTransactions(result.transactions);
     }
     setIsLoading(false);
-    showToast(`✓ Marked "${newStatus.toUpperCase()}" for ID ${id}`);
+    showToast(`Status updated to ${newStatus.toUpperCase()}`);
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm(`Are you sure you want to delete transaction ${id}?`)) {
+    if (window.confirm(`Permanently remove transaction ${id} from active records?`)) {
       setIsLoading(true);
       const updated = await deleteTransaction(id);
       setTransactions(updated);
       setIsLoading(false);
-      showToast(`Transaction ${id} deleted.`);
+      showToast(`Record ${id} removed`);
     }
   };
 
   const handleClearAll = async () => {
-    if (window.confirm('Are you sure you want to delete ALL entries? This action will remove all previous transactions from the dashboard.')) {
+    if (window.confirm('Are you sure you want to delete ALL active records from the dashboard?')) {
       setIsLoading(true);
       await clearAllTransactions();
       setTransactions([]);
       setIsLoading(false);
-      showToast('✓ All previous entries have been deleted.');
+      showToast('All records cleared');
     }
   };
 
@@ -151,7 +161,7 @@ function AdminDashboard({ onLogout }) {
       utr: ''
     });
     setIsLoading(false);
-    showToast(`Created manual transaction: ${created.verificationId}`);
+    showToast(`Created record: ${created.verificationId}`);
   };
 
   const handleExportData = () => {
@@ -160,10 +170,10 @@ function AdminDashboard({ onLogout }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `upi_transactions_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `upi_settlements_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Exported transactions JSON.');
+    showToast('Exported settlement records');
   };
 
   const handleLogout = async () => {
@@ -171,7 +181,6 @@ function AdminDashboard({ onLogout }) {
     onLogout();
   };
 
-  // Filtered transactions
   const filtered = transactions.filter(t => {
     const matchSearch = 
       (t.verificationId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -185,7 +194,6 @@ function AdminDashboard({ onLogout }) {
     return (t.status || 'pending') === filterStatus;
   });
 
-  // Calculate statistics
   const totalCount = transactions.length;
   const pendingCount = transactions.filter(t => (t.status || 'pending') === 'pending').length;
   const successCount = transactions.filter(t => t.status === 'successful').length;
@@ -210,216 +218,244 @@ function AdminDashboard({ onLogout }) {
     }
   };
 
-  // UTR Security Heuristics Badge
-  const getUtrStatusBadge = (utr) => {
+  const getUtrBadge = (utr) => {
     if (!utr) {
-      return <span className="utr-pill badge-warning" style={{ color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>⚠️ Missing UTR</span>;
+      return (
+        <span className="utr-pill-tag tag-warning">
+          <IconAlertCircle size={12} />
+          <span>Awaiting UTR</span>
+        </span>
+      );
     }
     const check = validateUTR(utr);
     if (!check.valid) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <span className="mono utr-pill" style={{ color: '#ef4444', textDecoration: 'line-through' }}>{utr}</span>
-          <span style={{ color: '#ef4444', fontSize: '0.7rem' }}>🚨 {check.error}</span>
+        <div className="utr-fraud-alert">
+          <span className="mono utr-pill-tag tag-danger">{utr}</span>
+          <span className="fraud-hint">{check.error}</span>
         </div>
       );
     }
-    return <span className="mono utr-pill" style={{ color: '#10b981', fontWeight: 600 }}>{utr}</span>;
+    return (
+      <span className="mono utr-pill-tag tag-success">
+        <IconCheck size={12} />
+        <span>{utr}</span>
+      </span>
+    );
   };
 
   return (
-    <div className="admin-dashboard-root fade-in">
-      {/* Top Notification Bar */}
+    <div className="admin-dashboard-container fade-in">
+      {/* Toast Notification */}
       {notification && (
-        <div className="admin-toast-notification fade-in">
-          {notification}
+        <div className="admin-toast-panel fade-in">
+          <IconCheck size={16} className="text-emerald" />
+          <span>{notification}</span>
         </div>
       )}
 
-      {/* Header with Title and Actions */}
-      <div className="admin-dashboard-header">
+      {/* Top Header Bar */}
+      <div className="admin-topbar">
         <div>
-          <h2>Payment Verification Center</h2>
-          <p className="admin-welcome-text">
-            Logged in as: <strong>{getAdminName()}</strong> • Secured Session
+          <div className="admin-badge-row">
+            <span className="admin-live-pulse"></span>
+            <span className="admin-badge-text">SETTLEMENT VERIFICATION CONSOLE</span>
+          </div>
+          <h2 className="admin-page-heading">Treasury & Reconciliation</h2>
+          <p className="admin-session-text">
+            Authenticated as: <strong className="text-slate-200">{getAdminName()}</strong>
           </p>
         </div>
-        <div className="admin-header-actions">
-          <button onClick={() => loadData(true)} className="btn-secondary" title="Sync live updates">
-            🔄 Sync
+
+        <div className="admin-action-toolbar">
+          <button onClick={() => loadData(true)} className="dashboard-btn" title="Refresh live database">
+            <IconRefresh size={14} />
+            <span>Sync</span>
           </button>
-          <button onClick={() => setShowAddModal(true)} className="btn-secondary" title="Add manual entry">
-            + Add Manual
+          <button onClick={() => setShowAddModal(true)} className="dashboard-btn" title="Create manual transaction">
+            <span>+ Add Entry</span>
           </button>
-          <button onClick={handleExportData} className="btn-secondary" title="Export as JSON">
-            📥 Export
+          <button onClick={handleExportData} className="dashboard-btn" title="Export as JSON">
+            <IconDownload size={14} />
+            <span>Export</span>
           </button>
-          <button onClick={handleClearAll} className="btn-danger-outline" title="Delete all records">
-            Clear All
+          <button onClick={handleClearAll} className="dashboard-btn danger" title="Clear records">
+            <IconTrash size={14} />
           </button>
-          <button onClick={handleLogout} className="btn-logout" title="Sign out">
-            Logout
+          <button onClick={handleLogout} className="dashboard-btn logout" title="Sign Out">
+            <span>Logout</span>
           </button>
         </div>
       </div>
 
-      {/* Stats Summary Cards */}
-      <div className="admin-stats-grid">
-        <div className="stat-card stat-total">
-          <div className="stat-label">📋 Total Payments</div>
-          <div className="stat-value">{totalCount}</div>
+      {/* KPI Metric Cards */}
+      <div className="admin-kpi-grid">
+        <div className="kpi-card">
+          <div className="kpi-header">
+            <span className="kpi-label">TOTAL SESSIONS</span>
+            <IconCreditCard size={16} className="kpi-icon" />
+          </div>
+          <div className="kpi-value">{totalCount}</div>
+          <div className="kpi-footer">Across all channels</div>
         </div>
-        <div className="stat-card stat-pending">
-          <div className="stat-label">⏳ Under Progress</div>
-          <div className="stat-value">{pendingCount}</div>
+
+        <div className="kpi-card highlight-amber">
+          <div className="kpi-header">
+            <span className="kpi-label">PENDING RECONCILIATION</span>
+            <IconClock size={16} className="kpi-icon text-amber" />
+          </div>
+          <div className="kpi-value">{pendingCount}</div>
+          <div className="kpi-footer">Awaiting statement cross-check</div>
         </div>
-        <div className="stat-card stat-success">
-          <div className="stat-label">✅ Verified Success</div>
-          <div className="stat-value">{successCount}</div>
+
+        <div className="kpi-card highlight-emerald">
+          <div className="kpi-header">
+            <span className="kpi-label">SETTLED TRANSACTIONS</span>
+            <IconShieldCheck size={16} className="kpi-icon text-emerald" />
+          </div>
+          <div className="kpi-value">{successCount}</div>
+          <div className="kpi-footer">Verified credit in ICICI bank</div>
         </div>
-        <div className="stat-card stat-failed">
-          <div className="stat-label">❌ Failed</div>
-          <div className="stat-value">{failedCount}</div>
-        </div>
-        <div className="stat-card stat-revenue">
-          <div className="stat-label">💰 Verified Revenue</div>
-          <div className="stat-value">₹{totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+
+        <div className="kpi-card highlight-revenue">
+          <div className="kpi-header">
+            <span className="kpi-label">TOTAL SETTLED VOLUME</span>
+            <span className="kpi-icon-currency">₹</span>
+          </div>
+          <div className="kpi-value">₹{Number(totalRevenue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+          <div className="kpi-footer">Net credit confirmed</div>
         </div>
       </div>
 
-      {/* Controls Bar (Search + Filter tabs) */}
-      <div className="admin-controls-bar">
-        <div className="admin-search-wrapper">
+      {/* Search and Filters Bar */}
+      <div className="admin-filter-bar">
+        <div className="admin-search-box">
+          <IconSearch size={16} className="admin-search-icon" />
           <input
             type="text"
-            className="form-control admin-search-input"
-            placeholder="Search by ID, Name, Phone, UTR..."
+            className="admin-search-input"
+            placeholder="Search by Verification ID, Payer Name, Mobile, UTR..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
           {searchTerm && (
-            <button className="clear-search-btn" onClick={() => setSearchTerm('')}>
+            <button className="search-clear-action" onClick={() => setSearchTerm('')}>
               &times;
             </button>
           )}
         </div>
 
-        <div className="filter-tabs">
-          <button 
-            className={`filter-tab ${filterStatus === 'all' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('all')}
-          >
-            All ({totalCount})
-          </button>
-          <button 
-            className={`filter-tab ${filterStatus === 'pending' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('pending')}
-          >
-            Pending ({pendingCount})
-          </button>
-          <button 
-            className={`filter-tab ${filterStatus === 'successful' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('successful')}
-          >
-            Successful ({successCount})
-          </button>
-          <button 
-            className={`filter-tab ${filterStatus === 'failed' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('failed')}
-          >
-            Failed ({failedCount})
-          </button>
+        <div className="admin-segmented-filter">
+          {[
+            { id: 'all', label: `All (${totalCount})` },
+            { id: 'pending', label: `Pending (${pendingCount})` },
+            { id: 'successful', label: `Settled (${successCount})` },
+            { id: 'failed', label: `Declined (${failedCount})` }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              className={`filter-pill-btn ${filterStatus === tab.id ? 'active' : ''}`}
+              onClick={() => setFilterStatus(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Transactions List / Table */}
-      <div className="transactions-wrapper">
+      {/* Ledger Table Container */}
+      <div className="admin-table-wrapper">
         {filtered.length === 0 ? (
-          <div className="no-records-box">
-            <p>No payment records matching your filter.</p>
+          <div className="admin-empty-table">
+            <IconAlertCircle size={24} className="text-muted" />
+            <p>No matching transactions found.</p>
           </div>
         ) : (
-          <div className="tx-table-container">
-            <table className="tx-table">
+          <div className="table-responsive">
+            <table className="modern-admin-table">
               <thead>
                 <tr>
-                  <th>ID & Date</th>
-                  <th>Payer Details</th>
-                  <th>Purpose & Amount</th>
-                  <th>UTR / Security Check</th>
-                  <th>Current Status</th>
-                  <th>Verification Actions</th>
+                  <th>VERIFICATION ID & TIME</th>
+                  <th>PAYER CREDENTIALS</th>
+                  <th>AMOUNT & PURPOSE</th>
+                  <th>BANK UTR / INTEGRITY</th>
+                  <th>SETTLEMENT STATUS</th>
+                  <th>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(t => (
-                  <tr key={t.verificationId || t.name + t.createdAt} className={`tx-row-status-${t.status || 'pending'}`}>
+                  <tr key={t.verificationId || t.name + t.createdAt} className={`row-status-${t.status || 'pending'}`}>
                     <td>
-                      <div className="tx-id-badge">{t.verificationId || 'NO-ID'}</div>
-                      <div className="tx-date-sub">{formatDate(t.createdAt)}</div>
+                      <div className="table-ver-id mono font-semibold">{t.verificationId || 'NO-ID'}</div>
+                      <div className="table-meta-sub">{formatDate(t.createdAt)}</div>
                     </td>
+
                     <td>
-                      <div className="tx-payer-name">{t.name}</div>
-                      <div className="tx-contact-sub">{t.phone}</div>
-                      <div className="tx-contact-sub">{t.email}</div>
+                      <div className="table-payer-name font-medium">{t.name}</div>
+                      <div className="table-meta-sub mono">{t.phone}</div>
+                      <div className="table-meta-sub">{t.email}</div>
                     </td>
+
                     <td>
-                      <div className="tx-amount-highlight">₹{t.amount}</div>
-                      <div className="tx-purpose-sub">{t.purpose}</div>
-                      {t.source && <span className="source-tag">{t.source}</span>}
+                      <div className="table-amount font-semibold">₹{Number(t.amount).toLocaleString('en-IN')}</div>
+                      <div className="table-meta-sub">{t.purpose}</div>
+                      {t.source && <span className="entity-tag">{t.source}</span>}
                     </td>
+
                     <td>
-                      {getUtrStatusBadge(t.utr)}
+                      {getUtrBadge(t.utr)}
                     </td>
+
                     <td>
-                      <span className={`status-badge-pill ${t.status || 'pending'}`}>
-                        {(!t.status || t.status === 'pending') && '⏳ In Progress'}
-                        {t.status === 'successful' && '✅ Successful'}
-                        {t.status === 'failed' && '❌ Failed'}
+                      <span className={`status-chip chip-${t.status || 'pending'}`}>
+                        <span className="chip-dot"></span>
+                        <span>
+                          {(!t.status || t.status === 'pending') && 'Under Review'}
+                          {t.status === 'successful' && 'Settled'}
+                          {t.status === 'failed' && 'Declined'}
+                        </span>
                       </span>
                       {t.verifiedBy && (
-                        <div style={{ fontSize: '0.7rem', color: '#10b981', marginTop: '3px' }}>
-                          By: {t.verifiedBy}
-                        </div>
-                      )}
-                      {t.notes && (
-                        <div className="tx-note-text" title={t.notes}>
-                          Note: {t.notes}
+                        <div className="verified-by-audit">
+                          by {t.verifiedBy}
                         </div>
                       )}
                     </td>
+
                     <td>
-                      <div className="action-buttons-group">
+                      <div className="table-actions-cell">
                         <button
-                          className="btn-mark-success"
-                          title="Verify Bank Credit & Mark Successful"
+                          className="action-btn success-action"
+                          title="Verify Bank Credit & Mark Settled"
                           disabled={t.status === 'successful' || isLoading}
                           onClick={() => handleInitiateSuccess(t)}
                         >
-                          ✓ Verify
+                          <IconCheck size={14} />
+                          <span>Verify</span>
                         </button>
                         <button
-                          className="btn-mark-fail"
-                          title="Mark as Payment Failed"
+                          className="action-btn fail-action"
+                          title="Decline Payment"
                           disabled={t.status === 'failed' || isLoading}
                           onClick={() => handleStatusChange(t.verificationId, 'failed')}
                         >
-                          ✕ Fail
+                          <span>Decline</span>
                         </button>
                         <button
-                          className="btn-mark-pending"
+                          className="action-btn reset-action"
                           title="Reset to Pending"
                           disabled={(!t.status || t.status === 'pending') || isLoading}
                           onClick={() => handleStatusChange(t.verificationId, 'pending')}
                         >
-                          ↺ Reset
+                          <IconRefresh size={13} />
                         </button>
                         <button
-                          className="btn-delete"
+                          className="action-btn delete-action"
                           title="Delete Record"
                           onClick={() => handleDelete(t.verificationId)}
                         >
-                          🗑️
+                          <IconTrash size={14} />
                         </button>
                       </div>
                     </td>
@@ -431,102 +467,105 @@ function AdminDashboard({ onLogout }) {
         )}
       </div>
 
-      {/* 3-POINT MATCH VERIFICATION MODAL (Layer 4 Fraud Prevention) */}
+      {/* 3-POINT MATCH VERIFICATION MODAL */}
       {verifyingTx && (
         <div className="modal-backdrop" onClick={() => setVerifyingTx(null)}>
-          <div className="modal-dialog glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
-            <div className="modal-header">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>🛡️</span> 3-Point Bank Cross-Check
-              </h3>
-              <button className="modal-close" onClick={() => setVerifyingTx(null)}>&times;</button>
+          <div className="modal-dialog-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-panel-header">
+              <div className="modal-header-icon">
+                <IconShieldCheck size={20} className="text-emerald" />
+              </div>
+              <div>
+                <h3 className="modal-title">3-Point Bank Cross-Check</h3>
+                <p className="modal-subtitle">Confirm settlement against ICICI bank statement before approving</p>
+              </div>
+              <button className="modal-close-action" onClick={() => setVerifyingTx(null)}>&times;</button>
             </div>
             
-            <div className="verification-checklist-body">
-              <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
-                To protect against UPI spoof apps and fake UTR scams, confirm all 3 cross-check rules against your ICICI / bank statement before approving:
-              </p>
-
-              <div className="target-tx-summary" style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', marginBottom: '1.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ color: '#94a3b8' }}>Payer:</span>
-                  <strong>{verifyingTx.name}</strong>
+            <div className="modal-panel-body">
+              {/* Summary Card */}
+              <div className="modal-tx-preview">
+                <div className="preview-row">
+                  <span className="preview-label">Payer</span>
+                  <span className="preview-val font-medium">{verifyingTx.name}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ color: '#94a3b8' }}>Required Amount:</span>
-                  <strong style={{ color: '#38bdf8', fontSize: '1.1rem' }}>₹{verifyingTx.amount}</strong>
+                <div className="preview-row">
+                  <span className="preview-label">Required Amount</span>
+                  <span className="preview-val font-bold text-sky text-lg">
+                    ₹{Number(verifyingTx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>Submitted UTR:</span>
-                  <strong className="mono" style={{ color: verifyingTx.utr ? '#a7f3d0' : '#f87171' }}>
-                    {verifyingTx.utr || '⚠️ No UTR Provided'}
-                  </strong>
+                <div className="preview-row">
+                  <span className="preview-label">Submitted UTR</span>
+                  <span className="preview-val mono font-semibold" style={{ color: verifyingTx.utr ? '#10b981' : '#f87171' }}>
+                    {verifyingTx.utr || 'No UTR Submitted'}
+                  </span>
                 </div>
               </div>
 
-              {/* 3-Point Checklist */}
-              <div className="checklist-items" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '1.5rem' }}>
-                <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.9rem' }}>
+              {/* Checklist */}
+              <div className="checklist-group">
+                <label className="checklist-item">
                   <input 
                     type="checkbox" 
                     checked={checkAmount} 
                     onChange={(e) => setCheckAmount(e.target.checked)}
-                    style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: '#10b981' }}
+                    className="custom-checkbox"
                   />
-                  <span>
-                    <strong>1. Exact Amount Check:</strong> I have confirmed that exactly <strong>₹{verifyingTx.amount}</strong> has been credited to my bank account (not ₹1 or lesser).
+                  <span className="checklist-text">
+                    <strong>1. Exact Amount Check:</strong> I have confirmed that exactly <strong>₹{verifyingTx.amount}</strong> was credited to my bank account.
                   </span>
                 </label>
 
-                <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <label className="checklist-item">
                   <input 
                     type="checkbox" 
                     checked={checkUtr} 
                     onChange={(e) => setCheckUtr(e.target.checked)}
-                    style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: '#10b981' }}
+                    className="custom-checkbox"
                   />
-                  <span>
-                    <strong>2. Bank UTR Match:</strong> The 12-digit reference number <strong>{verifyingTx.utr || '(No UTR)'}</strong> appears in my bank passbook/SMS credit alert.
+                  <span className="checklist-text">
+                    <strong>2. Bank UTR Match:</strong> The 12-digit reference <strong>{verifyingTx.utr || '(No UTR)'}</strong> appears in my bank passbook/SMS alert.
                   </span>
                 </label>
 
-                <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <label className="checklist-item">
                   <input 
                     type="checkbox" 
                     checked={checkTime} 
                     onChange={(e) => setCheckTime(e.target.checked)}
-                    style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: '#10b981' }}
+                    className="custom-checkbox"
                   />
-                  <span>
-                    <strong>3. Timestamp Alignment:</strong> Credit was received around {formatDate(verifyingTx.createdAt)}.
+                  <span className="checklist-text">
+                    <strong>3. Timestamp Check:</strong> Bank credit occurred around {formatDate(verifyingTx.createdAt)}.
                   </span>
                 </label>
               </div>
 
-              <div className="form-group">
-                <label style={{ fontSize: '0.85rem' }}>Optional Audit Note / Memo</label>
+              <div className="form-group" style={{ marginTop: '1.25rem' }}>
+                <label className="field-label">Internal Settlement Memo (Optional)</label>
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="e.g. Verified in ICICI mobile app statement"
+                  placeholder="e.g. Verified in ICICI Corporate net banking"
                   value={adminNote}
                   onChange={(e) => setAdminNote(e.target.value)}
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '1.25rem' }}>
+              <div className="modal-cta-row">
                 <button
                   type="button"
-                  className="submit-btn"
-                  style={{ background: (!checkAmount || !checkUtr) ? '#475569' : '#10b981' }}
+                  className="primary-action-btn modal-confirm-btn"
                   disabled={!checkAmount || !checkUtr || isLoading}
                   onClick={handleConfirmVerifiedSuccess}
                 >
-                  {isLoading ? 'Verifying...' : '✓ Confirm & Unlock Official Receipt'}
+                  <IconCheck size={16} />
+                  <span>{isLoading ? 'Verifying...' : 'Authorize & Issue Receipt'}</span>
                 </button>
                 <button
                   type="button"
-                  className="back-btn"
+                  className="ghost-back-btn"
                   onClick={() => setVerifyingTx(null)}
                 >
                   Cancel
@@ -540,14 +579,18 @@ function AdminDashboard({ onLogout }) {
       {/* Manual Entry Modal */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
-          <div className="modal-dialog glass-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Add Manual Payment Record</h3>
-              <button className="modal-close" onClick={() => setShowAddModal(false)}>&times;</button>
+          <div className="modal-dialog-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-panel-header">
+              <div>
+                <h3 className="modal-title">Record Manual Payment</h3>
+                <p className="modal-subtitle">Directly add an offline bank or NEFT/UPI transaction</p>
+              </div>
+              <button className="modal-close-action" onClick={() => setShowAddModal(false)}>&times;</button>
             </div>
-            <form onSubmit={handleAddManual}>
+
+            <form onSubmit={handleAddManual} className="modal-panel-body">
               <div className="form-group">
-                <label>Payer Name *</label>
+                <label className="field-label">Payer Full Name *</label>
                 <input
                   type="text"
                   className="form-control"
@@ -556,47 +599,59 @@ function AdminDashboard({ onLogout }) {
                   required
                 />
               </div>
+
               <div className="form-group">
-                <label>Amount (₹) *</label>
+                <label className="field-label">Amount (INR) *</label>
                 <input
                   type="number"
                   className="form-control"
+                  placeholder="0.00"
                   value={manualForm.amount}
                   onChange={(e) => setManualForm({...manualForm, amount: e.target.value})}
                   required
                 />
               </div>
+
               <div className="form-group">
-                <label>UTR Number</label>
+                <label className="field-label">12-Digit UTR Number</label>
                 <input
                   type="text"
-                  className="form-control mono-input"
-                  placeholder="12-digit reference"
+                  className="form-control mono"
+                  placeholder="e.g. 410293847561"
                   value={manualForm.utr}
                   onChange={(e) => setManualForm({...manualForm, utr: e.target.value})}
                 />
               </div>
-              <div className="form-group">
-                <label>Phone Number</label>
-                <input
-                  type="tel"
-                  className="form-control"
-                  value={manualForm.phone}
-                  onChange={(e) => setManualForm({...manualForm, phone: e.target.value})}
-                />
+
+              <div className="form-row-2col">
+                <div className="form-group">
+                  <label className="field-label">Mobile Number</label>
+                  <input
+                    type="tel"
+                    className="form-control"
+                    value={manualForm.phone}
+                    onChange={(e) => setManualForm({...manualForm, phone: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="field-label">Email ID</label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    value={manualForm.email}
+                    onChange={(e) => setManualForm({...manualForm, email: e.target.value})}
+                  />
+                </div>
               </div>
-              <div className="form-group">
-                <label>Email ID</label>
-                <input
-                  type="email"
-                  className="form-control"
-                  value={manualForm.email}
-                  onChange={(e) => setManualForm({...manualForm, email: e.target.value})}
-                />
+
+              <div className="modal-cta-row">
+                <button type="submit" className="primary-action-btn modal-confirm-btn" disabled={isLoading}>
+                  <span>{isLoading ? 'Creating...' : 'Save Settlement Entry'}</span>
+                </button>
+                <button type="button" className="ghost-back-btn" onClick={() => setShowAddModal(false)}>
+                  Cancel
+                </button>
               </div>
-              <button type="submit" className="submit-btn" disabled={isLoading}>
-                {isLoading ? 'Saving...' : 'Save Transaction'}
-              </button>
             </form>
           </div>
         </div>

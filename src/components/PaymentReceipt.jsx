@@ -5,6 +5,16 @@ import {
   maskEmail, 
   generateReceiptFingerprint 
 } from '../services/security';
+import { 
+  IconShieldCheck, 
+  IconPrinter, 
+  IconCopy, 
+  IconCheck, 
+  IconArrowLeft, 
+  IconLock,
+  IconEye,
+  IconEyeOff
+} from './Icons';
 
 function PaymentReceipt({ transaction, onBack, isAdminView = false }) {
   const [copied, setCopied] = useState(false);
@@ -32,8 +42,8 @@ function PaymentReceipt({ transaction, onBack, isAdminView = false }) {
 === OFFICIAL PAYMENT RECEIPT ===
 Payee: Abhijit Kumar (euonabhijit@okicici)
 Verification ID: ${transaction.verificationId}
-Status: VERIFIED SUCCESSFUL
-Amount: ₹${transaction.amount}
+Status: VERIFIED & SETTLED
+Amount: ₹${Number(transaction.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
 Payer Name: ${transaction.name}
 Email: ${isMasked ? maskEmail(transaction.email) : transaction.email}
 Phone: ${isMasked ? maskPhone(transaction.phone) : transaction.phone}
@@ -69,155 +79,171 @@ Verify Online: ${verificationUrl}
   };
 
   return (
-    <div className="receipt-container fade-in">
-      <div className="receipt-card" id="printable-receipt">
-        {/* Receipt Header */}
-        <div className="receipt-header">
-          <div className="receipt-badge-success">
-            <span className="receipt-check">✓</span>
+    <div className="receipt-view-wrapper fade-in">
+      <div className="receipt-card-container" id="printable-receipt">
+        
+        {/* Receipt Header with Brand & Verified Status */}
+        <div className="receipt-header-row">
+          <div className="receipt-brand-col">
+            <div className="receipt-brand-badge">
+              <img src="/codeed-icon.png" alt="codeED" className="receipt-brand-logo" />
+              <div>
+                <span className="brand-name">codeED</span>
+                <span className="brand-product">PAYMENT SETTLEMENTS</span>
+              </div>
+            </div>
+            <div className="receipt-voucher-number">
+              OFFICIAL RECEIPT · {transaction.verificationId}
+            </div>
           </div>
-          <h2>Payment Receipt</h2>
-          <p className="receipt-sub">Verified & Confirmed by Receiver</p>
-          <div className="receipt-amount">₹{parseFloat(transaction.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+
+          <div className="receipt-status-col">
+            <div className="receipt-verified-badge">
+              <span className="pulsing-green-dot"></span>
+              <IconShieldCheck size={14} className="text-emerald" />
+              <span>VERIFIED & SETTLED</span>
+            </div>
+            <div className="receipt-issue-date">
+              Settled: {formatDate(transaction.verifiedAt)}
+            </div>
+          </div>
         </div>
 
-        <div className="receipt-divider"></div>
+        {/* Big Amount Display */}
+        <div className="receipt-amount-banner">
+          <div className="amount-caption">TOTAL AMOUNT SETTLED</div>
+          <div className="amount-value-display">
+            <span className="amount-currency">₹</span>
+            <span className="amount-number">
+              {Number(transaction.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="amount-words-meta">
+            Payment Mode: Direct UPI (Instant Bank Settlement)
+          </div>
+        </div>
 
-        {/* Details Grid */}
-        <div className="receipt-grid">
-          <div className="receipt-row">
-            <span className="receipt-label">Verification ID</span>
-            <span className="receipt-value mono font-bold">{transaction.verificationId}</span>
+        {/* Perforated Divider Line */}
+        <div className="receipt-ticket-divider">
+          <div className="ticket-punch left"></div>
+          <div className="ticket-dash-line"></div>
+          <div className="ticket-punch right"></div>
+        </div>
+
+        {/* Financial Specification Grid */}
+        <div className="receipt-details-table">
+          <div className="receipt-detail-cell">
+            <span className="cell-label">PAYER NAME</span>
+            <span className="cell-value font-medium">{transaction.name}</span>
           </div>
 
-          <div className="receipt-row">
-            <span className="receipt-label">Status</span>
-            <span className="receipt-value status-pill success">
-              ● Payment Verified & Settled
+          <div className="receipt-detail-cell">
+            <span className="cell-label">PAYMENT PURPOSE</span>
+            <span className="cell-value">{transaction.purpose}</span>
+          </div>
+
+          <div className="receipt-detail-cell">
+            <span className="cell-label">PAYER CONTACT</span>
+            <span className="cell-value mono">
+              {isMasked ? maskPhone(transaction.phone) : transaction.phone}
             </span>
           </div>
 
-          <div className="receipt-row">
-            <span className="receipt-label">Payer Name</span>
-            <span className="receipt-value font-medium">{transaction.name}</span>
+          <div className="receipt-detail-cell">
+            <span className="cell-label">PAYER EMAIL</span>
+            <span className="cell-value">
+              {isMasked ? maskEmail(transaction.email) : transaction.email}
+            </span>
           </div>
 
-          {transaction.email && (
-            <div className="receipt-row">
-              <span className="receipt-label">Email ID</span>
-              <span className="receipt-value">
-                {isMasked ? maskEmail(transaction.email) : transaction.email}
-              </span>
-            </div>
-          )}
-
-          {transaction.phone && (
-            <div className="receipt-row">
-              <span className="receipt-label">Phone</span>
-              <span className="receipt-value">
-                {isMasked ? maskPhone(transaction.phone) : transaction.phone}
-              </span>
-            </div>
-          )}
-
-          <div className="receipt-row">
-            <span className="receipt-label">Purpose</span>
-            <span className="receipt-value">{transaction.purpose}</span>
+          <div className="receipt-detail-cell">
+            <span className="cell-label">BANK REF / UTR</span>
+            <span className="cell-value mono font-semibold text-emerald">
+              {transaction.utr || 'Directly Reconciled'}
+            </span>
           </div>
 
-          <div className="receipt-row">
-            <span className="receipt-label">Source</span>
-            <span className="receipt-value">{transaction.source}</span>
+          <div className="receipt-detail-cell">
+            <span className="cell-label">RECEIVER VPA</span>
+            <span className="cell-value mono">euonabhijit@okicici</span>
           </div>
 
-          {transaction.utr && (
-            <div className="receipt-row">
-              <span className="receipt-label">Bank UTR / Ref</span>
-              <span className="receipt-value mono">{transaction.utr}</span>
-            </div>
-          )}
-
-          <div className="receipt-row">
-            <span className="receipt-label">Submitted On</span>
-            <span className="receipt-value">{formatDate(transaction.createdAt)}</span>
+          <div className="receipt-detail-cell">
+            <span className="cell-label">INITIATED ON</span>
+            <span className="cell-value">{formatDate(transaction.createdAt)}</span>
           </div>
 
-          <div className="receipt-row">
-            <span className="receipt-label">Verified At</span>
-            <span className="receipt-value">{formatDate(transaction.verifiedAt)}</span>
-          </div>
-
-          <div className="receipt-row">
-            <span className="receipt-label">Payee VPA</span>
-            <span className="receipt-value mono">euonabhijit@okicici</span>
+          <div className="receipt-detail-cell">
+            <span className="cell-label">ENTITY TYPE</span>
+            <span className="cell-value">{transaction.source || 'Individual'}</span>
           </div>
         </div>
 
-        {/* Live Verification QR & Authenticity Seal */}
-        <div className="receipt-verification-footer" style={{ 
-          marginTop: '1.5rem', 
-          padding: '1rem', 
-          background: 'rgba(255, 255, 255, 0.04)', 
-          borderRadius: '12px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '1rem'
-        }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontWeight: 600, fontSize: '0.85rem' }}>
-              <span>🛡️</span> DIGITAL SECURITY FINGERPRINT
+        {/* Digital Verification & Audit Seal */}
+        <div className="receipt-security-seal-panel">
+          <div className="seal-meta-col">
+            <div className="seal-title">
+              <IconLock size={14} className="text-emerald" />
+              <span>CRYPTOGRAPHIC AUDIT SEAL</span>
             </div>
-            <div className="mono" style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', letterSpacing: '0.5px' }}>
+            <div className="seal-fingerprint mono">
               {receiptFingerprint}
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
-              Scan QR code with smartphone to verify authenticity online.
+            <div className="seal-description">
+              Tamper-evident hash generated from Verification ID, settled amount, and banking timestamp. Scan QR to authenticate.
             </div>
           </div>
 
-          <div style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-            <QRCodeSVG 
-              value={verificationUrl}
-              size={72}
-              level="M"
-              includeMargin={false}
-            />
+          <div className="seal-qr-col">
+            <div className="seal-qr-bezel">
+              <QRCodeSVG 
+                value={verificationUrl}
+                size={70}
+                level="M"
+                includeMargin={false}
+              />
+            </div>
+            <span className="scan-verify-label">Scan to Verify</span>
           </div>
         </div>
 
-        {/* Seal / Note */}
-        <div className="receipt-seal">
-          <div className="seal-box">
-            <span className="seal-text">OFFICIAL</span>
-            <span className="seal-sub">ABHIJIT KUMAR</span>
+        {/* Institutional Sign-off Footer */}
+        <div className="receipt-signoff-footer">
+          <div className="signoff-signature-block">
+            <div className="signature-line">Abhijit Kumar</div>
+            <div className="signature-caption">Authorized Receiver & Engineer</div>
           </div>
-          <p className="receipt-note">Official digital receipt. Tamper-proof cryptographic record verified on blockchain-ready database.</p>
+          <div className="signoff-legal">
+            This digital receipt confirms the electronic credit receipt to the receiver's ICICI Bank account via NPCI Unified Payments Interface (UPI).
+          </div>
         </div>
       </div>
 
-      {/* Action Buttons (Hidden when printing) */}
-      <div className="receipt-actions no-print">
-        <button onClick={handlePrint} className="submit-btn receipt-btn">
-          🖨️ Print / Save PDF
+      {/* Modern Control Actions Toolbar */}
+      <div className="receipt-toolbar no-print">
+        <button onClick={handlePrint} className="primary-action-btn toolbar-btn">
+          <IconPrinter size={16} />
+          <span>Print / Save PDF</span>
         </button>
 
         <button 
           onClick={() => setIsMasked(!isMasked)} 
-          className="back-btn receipt-btn"
-          title="Toggle privacy masking"
+          className="secondary-action-btn toolbar-btn"
+          title="Toggle privacy masking on contact details"
         >
-          {isMasked ? '👁️ Unmask Contact Info' : '🔒 Mask Contact Info'}
+          {isMasked ? <IconEye size={16} /> : <IconEyeOff size={16} />}
+          <span>{isMasked ? 'Unmask Details' : 'Mask Details'}</span>
         </button>
 
-        <button onClick={handleCopyDetails} className="back-btn receipt-btn">
-          {copied ? '✓ Copied Details!' : '📋 Copy Receipt Details'}
+        <button onClick={handleCopyDetails} className="secondary-action-btn toolbar-btn">
+          {copied ? <IconCheck size={16} className="text-emerald" /> : <IconCopy size={16} />}
+          <span>{copied ? 'Copied Receipt' : 'Copy Text'}</span>
         </button>
 
         {onBack && (
-          <button onClick={onBack} className="back-btn text-only-btn">
-            ← Back to Status Check
+          <button onClick={onBack} className="ghost-back-btn toolbar-back-btn">
+            <IconArrowLeft size={16} />
+            <span>Back to Status Search</span>
           </button>
         )}
       </div>

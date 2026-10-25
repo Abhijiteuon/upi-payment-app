@@ -18,7 +18,19 @@ import {
   validateAmount, 
   sanitizeText 
 } from './services/security';
+import { 
+  IconShieldCheck, 
+  IconCheck, 
+  IconCopy, 
+  IconArrowRight, 
+  IconArrowLeft, 
+  IconAlertCircle, 
+  IconClock, 
+  IconSmartPhone 
+} from './components/Icons';
 import './index.css';
+
+const QUICK_AMOUNTS = ['250', '500', '1000', '2500', '5000'];
 
 function App() {
   // Views: 'pay', 'status', 'admin'
@@ -29,8 +41,8 @@ function App() {
   // Payment form state
   const [formData, setFormData] = useState({
     name: '',
-    purpose: '',
-    source: '',
+    purpose: 'Freelance project completion Payment',
+    source: 'Individual',
     amount: '',
     phone: '',
     email: '',
@@ -61,7 +73,7 @@ function App() {
         setCurrentView('status');
       }
     } catch {
-      // ignore in environments without window.location.search
+      // ignore
     }
   }, []);
 
@@ -72,46 +84,42 @@ function App() {
     if (name === 'utr' && utrError) setUtrError('');
   };
 
+  const handleSelectQuickAmount = (amt) => {
+    setFormData(prev => ({ ...prev, amount: amt }));
+    if (formError) setFormError('');
+  };
+
   // Step 1 -> Step 2: Proceed to Pay with Full Input Validation
   const handleProceedToPay = async (e) => {
     e.preventDefault();
     setFormError('');
 
-    // 1. Sanitize & Validate Name
     const cleanName = sanitizeText(formData.name, 80);
     if (!cleanName || cleanName.length < 2) {
       setFormError('Please enter a valid full name (minimum 2 characters).');
       return;
     }
 
-    // 2. Validate Email
     const emailRes = validateEmail(formData.email);
     if (!emailRes.valid) {
       setFormError(emailRes.error);
       return;
     }
 
-    // 3. Validate Phone
     const phoneRes = validatePhone(formData.phone);
     if (!phoneRes.valid) {
       setFormError(phoneRes.error);
       return;
     }
 
-    // 4. Validate Amount
     const amountRes = validateAmount(formData.amount);
     if (!amountRes.valid) {
       setFormError(amountRes.error);
       return;
     }
 
-    // 5. Validate Purpose & Source
     if (!formData.purpose) {
-      setFormError('Please select a purpose of payment.');
-      return;
-    }
-    if (!formData.source) {
-      setFormError('Please select the payment source type.');
+      setFormError('Please specify the payment purpose.');
       return;
     }
 
@@ -125,14 +133,13 @@ function App() {
 
     setIsSubmitting(true);
     try {
-      // Create internal transaction record in Supabase
       const tx = await addTransaction(sanitizedData);
       setCreatedTransaction(tx);
       setActiveVerificationId(tx.verificationId);
       setPaymentStep('qr');
     } catch (err) {
       console.error('Payment registration error:', err);
-      setFormError('Failed to register payment session. Please check connection and try again.');
+      setFormError('Failed to initialize payment session. Please check connection and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -193,8 +200,8 @@ function App() {
   const handleResetToPay = () => {
     setFormData({
       name: '',
-      purpose: '',
-      source: '',
+      purpose: 'Freelance project completion Payment',
+      source: 'Individual',
       amount: '',
       phone: '',
       email: '',
@@ -220,7 +227,6 @@ function App() {
     setCurrentView('pay');
   };
 
-  // Pre-fill transaction note with Verification ID so bank statement shows it clearly!
   const noteContent = createdTransaction 
     ? `${createdTransaction.verificationId} - ${formData.purpose || 'Payment'}`
     : (formData.purpose || 'Payment to Abhijit');
@@ -236,7 +242,8 @@ function App() {
         onAdminLogout={handleAdminLogout}
       />
 
-      <div className="bg-shape"></div>
+      {/* Subtle Ambient Lighting */}
+      <div className="ambient-spotlight"></div>
       
       <main className="container">
         <div className={`glass-card ${currentView === 'admin' && isAdminLoggedIn ? 'admin-glass-card' : ''}`}>
@@ -244,119 +251,68 @@ function App() {
           {/* VIEW: MAKE A PAYMENT */}
           {currentView === 'pay' && (
             <>
+              {/* Sleek Step Indicator Timeline */}
+              <div className="stepper-bar">
+                <div className={`step-item ${paymentStep === 'form' ? 'active' : 'completed'}`}>
+                  <div className="step-circle">
+                    {paymentStep !== 'form' ? <IconCheck size={13} /> : '1'}
+                  </div>
+                  <span className="step-label">Details</span>
+                </div>
+                <div className="step-connector"></div>
+                <div className={`step-item ${paymentStep === 'qr' ? 'active' : paymentStep === 'confirmed' ? 'completed' : ''}`}>
+                  <div className="step-circle">
+                    {paymentStep === 'confirmed' ? <IconCheck size={13} /> : '2'}
+                  </div>
+                  <span className="step-label">Transfer</span>
+                </div>
+                <div className="step-connector"></div>
+                <div className={`step-item ${paymentStep === 'confirmed' ? 'active' : ''}`}>
+                  <div className="step-circle">3</div>
+                  <span className="step-label">Verify</span>
+                </div>
+              </div>
+
               {/* STEP 1: PAYMENT FORM */}
               {paymentStep === 'form' && (
-                <div className="fade-in">
-                  <div className="header">
-                    <h1 className="pay-heading-with-logo">
-                      <span className="pay-text-gradient">Pay</span>
-                      <img 
-                        src="/codeed-icon.png" 
-                        alt="codeED" 
-                        title="codeED"
-                        className="codeed-brand-logo-inline" 
-                      />
-                      <span className="pay-text-gradient">Securely</span>
+                <div className="fade-in form-view-container">
+                  <div className="card-header-block">
+                    <div className="header-meta-pill">
+                      <IconShieldCheck size={14} className="text-emerald" />
+                      <span>DIRECT INSTANT SETTLEMENT</span>
+                    </div>
+                    <h1 className="main-title">
+                      Initiate Payment
                     </h1>
-                    <p>Enter your payment details to generate a verified UPI transaction</p>
+                    <p className="sub-title">
+                      Complete payer details to generate a verified NPCI UPI transaction session
+                    </p>
                   </div>
 
                   {formError && (
-                    <div className="status-alert alert-error fade-in" style={{ marginBottom: '1.25rem' }}>
-                      <div className="alert-icon">⚠️</div>
+                    <div className="status-alert alert-error fade-in">
+                      <IconAlertCircle size={18} className="alert-icon-svg" />
                       <div className="alert-body">
                         <p>{formError}</p>
                       </div>
                     </div>
                   )}
 
-                  <form onSubmit={handleProceedToPay}>
-                    <div className="form-group">
-                      <label htmlFor="name">Full Name *</label>
-                      <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        className="form-control"
-                        placeholder="Enter your full name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        maxLength={80}
-                        required
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label htmlFor="email">Email ID *</label>
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        className="form-control"
-                        placeholder="e.g. name@example.com"
-                        value={formData.email}
-                        onChange={handleChange}
-                        required
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label htmlFor="phone">Phone Number *</label>
-                      <input
-                        type="tel"
-                        id="phone"
-                        name="phone"
-                        className="form-control"
-                        placeholder="10-digit mobile (e.g. 9876543210)"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        maxLength={15}
-                        required
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label htmlFor="purpose">Purpose of Payment *</label>
-                      <select
-                        id="purpose"
-                        name="purpose"
-                        className="form-control"
-                        value={formData.purpose}
-                        onChange={handleChange}
-                        required
-                      >
-                        <option value="" disabled>Select a purpose</option>
-                        <option value="Freelance project completion Payment">Freelance project completion Payment</option>
-                        <option value="Education-venture payment">Education-venture payment</option>
-                        <option value="Salary Payment">Salary Payment</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label htmlFor="source">Source *</label>
-                      <select
-                        id="source"
-                        name="source"
-                        className="form-control"
-                        value={formData.source}
-                        onChange={handleChange}
-                        required
-                      >
-                        <option value="" disabled>Select source type</option>
-                        <option value="Organisation">Organisation</option>
-                        <option value="Private">Private</option>
-                        <option value="Individual">Individual</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label htmlFor="amount">Amount (INR) *</label>
-                      <div className="amount-input-wrapper">
+                  <form onSubmit={handleProceedToPay} className="payment-form-grid">
+                    
+                    {/* Amount Field with Quick Select Chips */}
+                    <div className="form-group amount-group">
+                      <div className="amount-label-row">
+                        <label htmlFor="amount" className="field-label">Transfer Amount (INR)</label>
+                        <span className="amount-currency-tag">₹ INR</span>
+                      </div>
+                      <div className="amount-input-box">
+                        <span className="currency-symbol">₹</span>
                         <input
                           type="number"
                           id="amount"
                           name="amount"
-                          className="form-control"
+                          className="amount-input"
                           placeholder="0.00"
                           min="1"
                           max="100000"
@@ -364,87 +320,252 @@ function App() {
                           value={formData.amount}
                           onChange={handleChange}
                           required
+                          autoFocus
+                        />
+                      </div>
+
+                      {/* Quick Amount Selector Chips */}
+                      <div className="quick-amount-row">
+                        <span className="quick-amount-hint">Quick Select:</span>
+                        {QUICK_AMOUNTS.map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`quick-amount-chip ${formData.amount === amt ? 'selected' : ''}`}
+                            onClick={() => handleSelectQuickAmount(amt)}
+                          >
+                            ₹{Number(amt).toLocaleString('en-IN')}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Full Name & Phone */}
+                    <div className="form-row-2col">
+                      <div className="form-group">
+                        <label htmlFor="name" className="field-label">Payer Full Name *</label>
+                        <input
+                          type="text"
+                          id="name"
+                          name="name"
+                          className="form-control"
+                          placeholder="Enter your legal name"
+                          value={formData.name}
+                          onChange={handleChange}
+                          maxLength={80}
+                          required
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label htmlFor="phone" className="field-label">Mobile Number *</label>
+                        <input
+                          type="tel"
+                          id="phone"
+                          name="phone"
+                          className="form-control"
+                          placeholder="10-digit number"
+                          value={formData.phone}
+                          onChange={handleChange}
+                          maxLength={15}
+                          required
                         />
                       </div>
                     </div>
 
-                    <button type="submit" className="submit-btn" disabled={isSubmitting}>
-                      {isSubmitting ? 'Securing Transaction...' : `Proceed to Pay ₹${formData.amount || '0.00'}`}
+                    {/* Email */}
+                    <div className="form-group">
+                      <label htmlFor="email" className="field-label">Email ID (for e-receipt) *</label>
+                      <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        className="form-control"
+                        placeholder="name@company.com"
+                        value={formData.email}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+
+                    {/* Purpose of Payment */}
+                    <div className="form-group">
+                      <label htmlFor="purpose" className="field-label">Purpose of Payment *</label>
+                      <select
+                        id="purpose"
+                        name="purpose"
+                        className="form-control custom-select"
+                        value={formData.purpose}
+                        onChange={handleChange}
+                        required
+                      >
+                        <option value="Freelance project completion Payment">Freelance project completion Payment</option>
+                        <option value="Education-venture payment">Education-venture payment</option>
+                        <option value="Salary Payment">Salary Payment</option>
+                        <option value="Consultancy & Engineering Advisory">Consultancy & Engineering Advisory</option>
+                        <option value="General Transfer">General Transfer</option>
+                      </select>
+                    </div>
+
+                    {/* Source Selector as Modern Segmented Control */}
+                    <div className="form-group">
+                      <label className="field-label">Payer Category / Entity Type *</label>
+                      <div className="segmented-control">
+                        {['Individual', 'Private', 'Organisation'].map((src) => (
+                          <button
+                            key={src}
+                            type="button"
+                            className={`segmented-btn ${formData.source === src ? 'active' : ''}`}
+                            onClick={() => setFormData(prev => ({ ...prev, source: src }))}
+                          >
+                            {src}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button type="submit" className="primary-action-btn" disabled={isSubmitting}>
+                      <span>{isSubmitting ? 'Securing Transaction...' : `Generate UPI QR · ₹${formData.amount ? Number(formData.amount).toLocaleString('en-IN') : '0.00'}`}</span>
+                      <IconArrowRight size={18} />
                     </button>
+
+                    <div className="guarantee-footer">
+                      <IconShieldCheck size={15} className="text-emerald" />
+                      <span>Secured with end-to-end 256-bit encryption • Direct ICICI Bank Settlement</span>
+                    </div>
                   </form>
                 </div>
               )}
 
               {/* STEP 2: LOCAL PRIVACY-SAFE QR & UPI PAYMENT SCREEN */}
               {paymentStep === 'qr' && (
-                <div className="fade-in qr-placeholder">
-                  <div className="step-indicator">Step 2 of 3: Complete Payment</div>
-                  <h3>Scan to Pay ₹{formData.amount}</h3>
-                  <p className="pay-purpose-tag">Purpose: {formData.purpose}</p>
-                  
-                  {/* Dynamic Local QR (No external server leaks) */}
-                  <div className="qr-box" style={{ background: '#ffffff', padding: '12px', borderRadius: '16px', display: 'inline-flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <QRCodeSVG 
-                      value={upiLink} 
-                      size={180}
-                      level="H"
-                      includeMargin={false}
-                    />
-                  </div>
-                  
-                  <div className="upi-id-row">
-                    <span className="upi-id-label">UPI ID:</span>
-                    <span className="upi-id-display">euonabhijit@okicici</span>
-                    <button 
-                      type="button" 
-                      onClick={handleCopyVpa} 
-                      className="copy-mini-btn"
-                      title="Copy UPI ID"
-                    >
-                      {isCopiedVpa ? '✓ Copied' : 'Copy'}
-                    </button>
+                <div className="fade-in qr-view-container">
+                  <div className="card-header-block text-center">
+                    <div className="header-meta-pill">
+                      <IconClock size={13} className="text-sky" />
+                      <span>TRANSACTION SESSION ACTIVE</span>
+                    </div>
+                    <h2 className="main-title">
+                      Scan & Pay ₹{Number(formData.amount).toLocaleString('en-IN')}
+                    </h2>
+                    <p className="sub-title">
+                      Scan the verified UPI QR with any mobile app or use direct intent link
+                    </p>
                   </div>
 
-                  <div className="upi-actions-block">
+                  {/* Elevated High-Contrast QR Terminal Card */}
+                  <div className="qr-terminal-card">
+                    <div className="qr-terminal-frame">
+                      <div className="qr-corner top-left"></div>
+                      <div className="qr-corner top-right"></div>
+                      <div className="qr-corner bottom-left"></div>
+                      <div className="qr-corner bottom-right"></div>
+
+                      <QRCodeSVG 
+                        value={upiLink} 
+                        size={190}
+                        level="H"
+                        includeMargin={false}
+                        className="rendered-qr-svg"
+                      />
+                    </div>
+
+                    {/* VPA Copy Pill */}
+                    <div className="vpa-display-pill">
+                      <div className="vpa-info">
+                        <span className="vpa-label">OFFICIAL RECEIVER VPA</span>
+                        <span className="vpa-address">euonabhijit@okicici</span>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={handleCopyVpa} 
+                        className="copy-pill-btn"
+                        title="Copy UPI ID"
+                      >
+                        {isCopiedVpa ? <IconCheck size={14} className="text-emerald" /> : <IconCopy size={14} />}
+                        <span>{isCopiedVpa ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+
+                    {/* Supported UPI Apps Row */}
+                    <div className="supported-apps-row">
+                      <span className="app-badge gpay">Google Pay</span>
+                      <span className="app-badge phonepe">PhonePe</span>
+                      <span className="app-badge paytm">Paytm</span>
+                      <span className="app-badge cred">CRED</span>
+                      <span className="app-badge bhim">BHIM</span>
+                    </div>
+                  </div>
+
+                  {/* Mobile Deep Link */}
+                  <div className="direct-open-block">
                     <a 
                       href={upiLink} 
-                      className="submit-btn direct-pay-btn"
+                      className="secondary-action-btn mobile-pay-btn"
                     >
-                      🚀 Open in UPI App (GPay / PhonePe / Paytm)
+                      <IconSmartPhone size={17} />
+                      <span>Open in Installed UPI App</span>
                     </a>
                   </div>
 
-                  {/* UTR Input before confirmation */}
-                  <div className="utr-input-box">
-                    <label htmlFor="utr">Already paid? Enter 12-digit UPI Ref / UTR</label>
-                    <input
-                      type="text"
-                      id="utr"
-                      name="utr"
-                      className="form-control mono-input"
-                      placeholder="e.g. 410293847561"
-                      maxLength={12}
-                      value={formData.utr}
-                      onChange={handleChange}
-                    />
+                  {/* UTR Input Section */}
+                  <div className="utr-capture-card">
+                    <div className="utr-label-row">
+                      <label htmlFor="utr" className="field-label">
+                        Enter 12-Digit Bank Reference (UTR)
+                      </label>
+                      <span className={`utr-counter ${(formData.utr || '').length === 12 ? 'ready' : ''}`}>
+                        {(formData.utr || '').length} / 12 digits
+                      </span>
+                    </div>
+
+                    <div className="utr-input-wrapper">
+                      <input
+                        type="text"
+                        id="utr"
+                        name="utr"
+                        className="form-control mono-input utr-field"
+                        placeholder="e.g. 410293847561"
+                        maxLength={12}
+                        value={formData.utr}
+                        onChange={handleChange}
+                      />
+                      {(formData.utr || '').length === 12 && !utrError && (
+                        <div className="utr-valid-tick">
+                          <IconCheck size={16} className="text-emerald" />
+                        </div>
+                      )}
+                    </div>
+
                     {utrError ? (
-                      <div className="status-alert alert-error fade-in" style={{ marginTop: '0.5rem', padding: '0.6rem 0.8rem' }}>
-                        <span style={{ fontSize: '0.85rem' }}>⚠️ {utrError}</span>
+                      <div className="status-alert alert-error fade-in" style={{ marginTop: '0.6rem' }}>
+                        <IconAlertCircle size={16} className="alert-icon-svg" />
+                        <span style={{ fontSize: '0.85rem' }}>{utrError}</span>
                       </div>
                     ) : (
-                      <small style={{ color: '#94a3b8', fontSize: '0.8rem', display: 'block', marginTop: '0.3rem' }}>
-                        💡 12-digit bank reference number enables instant verification.
-                      </small>
+                      <p className="utr-help-text">
+                        The 12-digit UTR appears on your bank debited SMS or payment success screen. Providing it initiates instant automated reconciliation.
+                      </p>
                     )}
                   </div>
                   
-                  <div className="qr-footer-actions">
-                    <button onClick={handleConfirmPaid} className="submit-btn continue-pay-btn" disabled={isSubmitting}>
-                      {isSubmitting ? 'Verifying...' : '✓ I Have Made the Payment (Continue)'}
+                  {/* Action Buttons */}
+                  <div className="step-actions-footer">
+                    <button 
+                      onClick={handleConfirmPaid} 
+                      className="primary-action-btn"
+                      disabled={isSubmitting}
+                    >
+                      <span>{isSubmitting ? 'Verifying Submission...' : 'I Have Completed Payment'}</span>
+                      <IconCheck size={18} />
                     </button>
 
-                    <button onClick={() => setPaymentStep('form')} className="back-btn">
-                      ← Edit Details
+                    <button 
+                      onClick={() => setPaymentStep('form')} 
+                      className="ghost-back-btn"
+                    >
+                      <IconArrowLeft size={16} />
+                      <span>Modify Payment Details</span>
                     </button>
                   </div>
                 </div>
@@ -452,49 +573,66 @@ function App() {
 
               {/* STEP 3: PAYMENT SUBMITTED & VERIFICATION ID */}
               {paymentStep === 'confirmed' && createdTransaction && (
-                <div className="fade-in confirmation-panel">
-                  <div className="confirmation-icon-badge">
-                    <span>⏳</span>
+                <div className="fade-in confirmed-view-container">
+                  <div className="status-pulse-badge">
+                    <div className="pulse-beacon"></div>
+                    <IconClock size={28} className="beacon-icon" />
                   </div>
 
-                  <h2>Payment Submitted!</h2>
-                  <p className="confirmation-sub">
-                    Your transaction details have been registered for receiver verification.
+                  <h2 className="main-title text-center">
+                    Payment Registered
+                  </h2>
+                  <p className="sub-title text-center">
+                    Your transaction has been securely queued for receiver credit reconciliation.
                   </p>
 
-                  <div className="verification-id-card">
-                    <span className="ver-id-label">YOUR PAYMENT VERIFICATION ID</span>
-                    <div className="ver-id-code">{createdTransaction.verificationId}</div>
+                  <div className="verification-code-card">
+                    <span className="ver-card-subtitle">UNIQUE TRACKING ID</span>
+                    <div className="ver-card-number">{createdTransaction.verificationId}</div>
                     <button 
                       onClick={handleCopyVerificationId}
-                      className="copy-id-btn"
+                      className="copy-ver-id-btn"
                     >
-                      {isCopiedId ? '✓ ID Copied to Clipboard!' : '📋 Copy Verification ID'}
+                      {isCopiedId ? <IconCheck size={15} className="text-emerald" /> : <IconCopy size={15} />}
+                      <span>{isCopiedId ? 'ID Copied to Clipboard' : 'Copy Verification ID'}</span>
                     </button>
                   </div>
 
-                  <div className="verification-info-alert">
-                    <p>
-                      ⚡ <strong>Live Status Updates:</strong> Once Abhijit verifies the payment, your status will update in real-time.
-                    </p>
-                    <p>
-                      Click <strong>Track Status</strong> below to watch your receipt unlock live!
-                    </p>
+                  <div className="timeline-info-box">
+                    <div className="timeline-point">
+                      <div className="point-dot active"></div>
+                      <div className="point-text">
+                        <strong>Transaction Registered:</strong> Database session opened with Verification ID.
+                      </div>
+                    </div>
+                    <div className="timeline-point">
+                      <div className="point-dot pulse"></div>
+                      <div className="point-text">
+                        <strong>Bank Statement Reconciliation:</strong> Receiver will match your 12-digit UTR against the ICICI bank statement.
+                      </div>
+                    </div>
+                    <div className="timeline-point">
+                      <div className="point-dot"></div>
+                      <div className="point-text">
+                        <strong>Instant Receipt Unlock:</strong> Once approved, your official tax receipt unlocks live.
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="confirmation-actions">
+                  <div className="confirmation-cta-actions">
                     <button 
                       onClick={handleTrackCreatedPayment}
-                      className="submit-btn"
+                      className="primary-action-btn"
                     >
-                      🔍 Track Status of This Payment
+                      <span>Track Live Status & View Receipt</span>
+                      <IconArrowRight size={17} />
                     </button>
                     
                     <button 
                       onClick={handleResetToPay}
-                      className="back-btn"
+                      className="ghost-back-btn"
                     >
-                      + Make Another Payment
+                      <span>+ Create Another Transaction</span>
                     </button>
                   </div>
                 </div>

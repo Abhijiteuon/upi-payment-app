@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
 import { loginAdminWithSupabase, registerAdminWithSupabase } from '../services/storage';
+import { 
+  IconLock, 
+  IconEye, 
+  IconEyeOff, 
+  IconAlertCircle, 
+  IconCheck, 
+  IconShieldCheck,
+  IconArrowRight 
+} from './Icons';
 
 function AdminLogin({ onLoginSuccess, onCancel }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
@@ -25,7 +34,7 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
         return;
       }
       if (password.length < 6) {
-        setError('Password must be at least 6 characters long.');
+        setError('Password must contain at least 6 characters.');
         setIsShaking(true);
         setTimeout(() => setIsShaking(false), 600);
         return;
@@ -37,7 +46,7 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
 
       if (res.success) {
         if (res.requiresEmailConfirmation) {
-          setSuccessMsg('Account registered! Please check your email to confirm registration or sign in if email confirmations are disabled.');
+          setSuccessMsg('Account created. Check your email to confirm registration or sign in directly.');
           setMode('login');
         } else {
           onLoginSuccess();
@@ -58,28 +67,32 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
     if (result.success) {
       onLoginSuccess();
     } else {
-      setError(result.error || 'Invalid credentials. Access denied.');
+      setError(result.error || 'Invalid administrator credentials. Access denied.');
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 600);
     }
   };
 
   return (
-    <div className={`fade-in ${isShaking ? 'shake-animation' : ''}`}>
-      <div className="header">
-        <div className="admin-lock-icon">🔒</div>
-        <h1>{mode === 'login' ? 'Admin Security Portal' : 'Register Admin Account'}</h1>
-        <p>
+    <div className={`admin-login-wrapper fade-in ${isShaking ? 'shake-animation' : ''}`}>
+      <div className="card-header-block text-center">
+        <div className="admin-lock-badge">
+          <IconLock size={26} className="lock-icon-svg" />
+        </div>
+        <h1 className="main-title">
+          {mode === 'login' ? 'Administrator Portal' : 'Register Administrator'}
+        </h1>
+        <p className="sub-title">
           {mode === 'login'
-            ? 'Enter your verified administrator credentials to access the verification panel'
-            : 'Set up an authorized administrator account in Supabase'}
+            ? 'Authenticate to access live settlement verification & audit controls'
+            : 'Initialize an authorized administrator account in Supabase Auth'}
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="admin-login-form">
+      <form onSubmit={handleSubmit} className="admin-auth-form">
         {error && (
-          <div className="status-alert alert-error fade-in" style={{ marginBottom: '1.25rem' }}>
-            <div className="alert-icon">🚫</div>
+          <div className="status-alert alert-error fade-in">
+            <IconAlertCircle size={18} className="alert-icon-svg" />
             <div className="alert-body">
               <p>{error}</p>
             </div>
@@ -87,8 +100,8 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
         )}
 
         {successMsg && (
-          <div className="status-alert alert-success fade-in" style={{ marginBottom: '1.25rem' }}>
-            <div className="alert-icon">✓</div>
+          <div className="status-alert alert-success fade-in">
+            <IconCheck size={18} className="alert-icon-svg text-emerald" />
             <div className="alert-body">
               <p>{successMsg}</p>
             </div>
@@ -96,27 +109,28 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
         )}
 
         <div className="form-group">
-          <label htmlFor="admin-email">Admin Email Address</label>
+          <label htmlFor="admin-email" className="field-label">Admin Email Address</label>
           <input
             type="email"
             id="admin-email"
             className="form-control"
-            placeholder="admin@yourdomain.com"
+            placeholder="admin@codeed.in"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
+            autoFocus
           />
         </div>
 
         <div className="form-group">
-          <label htmlFor="admin-password">Password</label>
+          <label htmlFor="admin-password" className="field-label">Master Password</label>
           <div className="password-input-wrapper">
             <input
               type={showPassword ? 'text' : 'password'}
               id="admin-password"
               className="form-control"
-              placeholder="Enter secure password"
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -124,23 +138,23 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
             />
             <button
               type="button"
-              className="toggle-password-btn"
+              className="password-toggle-action"
               onClick={() => setShowPassword(!showPassword)}
               aria-label="Toggle password visibility"
             >
-              {showPassword ? '👁️' : '👁️‍🗨️'}
+              {showPassword ? <IconEyeOff size={16} /> : <IconEye size={16} />}
             </button>
           </div>
         </div>
 
         {mode === 'register' && (
           <div className="form-group">
-            <label htmlFor="admin-confirm-password">Confirm Password</label>
+            <label htmlFor="admin-confirm-password" className="field-label">Confirm Master Password</label>
             <input
               type={showPassword ? 'text' : 'password'}
               id="admin-confirm-password"
               className="form-control"
-              placeholder="Re-enter password"
+              placeholder="Confirm your password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
@@ -149,11 +163,12 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
           </div>
         )}
 
-        <button type="submit" className="submit-btn admin-submit-btn" disabled={isLoading}>
-          {isLoading ? 'Authenticating...' : mode === 'login' ? 'Authenticate & Enter' : 'Create Admin Account'}
+        <button type="submit" className="primary-action-btn admin-submit-btn" disabled={isLoading}>
+          <span>{isLoading ? 'Verifying Credentials...' : mode === 'login' ? 'Sign In to Portal' : 'Create Admin Account'}</span>
+          <IconArrowRight size={17} />
         </button>
 
-        <div style={{ marginTop: '1.25rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div className="admin-form-footer-actions">
           <button 
             type="button" 
             onClick={() => {
@@ -161,19 +176,19 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
               setError('');
               setSuccessMsg('');
             }}
-            className="back-btn"
-            style={{ fontSize: '0.85rem' }}
+            className="ghost-text-btn"
           >
-            {mode === 'login' ? 'Need to create an admin account? Register here' : 'Already have an admin account? Sign in'}
+            {mode === 'login' ? 'Create new admin credentials' : 'Back to Administrator Login'}
           </button>
 
-          <button type="button" onClick={onCancel} className="back-btn" style={{ opacity: 0.8 }}>
-            Cancel & Return
+          <button type="button" onClick={onCancel} className="ghost-back-btn">
+            Cancel & Return to Payment
           </button>
         </div>
 
-        <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.75rem', color: '#64748b' }}>
-          🛡️ Protected by Supabase JWT Authentication & Row Level Security
+        <div className="admin-security-seal">
+          <IconShieldCheck size={14} className="text-emerald" />
+          <span>Protected by Supabase JWT & Row Level Security</span>
         </div>
       </form>
     </div>
