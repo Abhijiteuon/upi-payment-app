@@ -86,9 +86,6 @@ Verify Online: ${verificationUrl}
         <div className="receipt-header-row">
           <div className="receipt-brand-col">
             <div className="receipt-brand-badge">
-              <div className="nav-brand-icon-box">
-                <IconShieldCheck size={18} className="text-emerald" />
-              </div>
               <div>
                 <span className="brand-name">CLOAK</span>
                 <span className="brand-product">CREDENTIAL-LESS LINK FOR ONLINE AUTH & KEYS</span>
