@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   getTransactions, 
   deleteTransaction, 
-  clearAllTransactions,
+  clearAllTransactions, 
   addTransaction, 
-  setAdminSession, 
   getAdminName,
   fetchRemoteTransactions, 
   updateRemoteStatus,
-  subscribeToAllTransactions
+  subscribeToAllTransactions,
+  logoutAdmin
 } from '../services/storage';
+import { validateUTR } from '../services/security';
 
 function AdminDashboard({ onLogout }) {
   const [transactions, setTransactions] = useState([]);
@@ -18,6 +19,13 @@ function AdminDashboard({ onLogout }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [notification, setNotification] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Security Verification Modal state (The 3-Point Match Rule)
+  const [verifyingTx, setVerifyingTx] = useState(null);
+  const [checkAmount, setCheckAmount] = useState(false);
+  const [checkUtr, setCheckUtr] = useState(false);
+  const [checkTime, setCheckTime] = useState(false);
+  const [adminNote, setAdminNote] = useState('');
 
   // Form for manual entry
   const [manualForm, setManualForm] = useState({
@@ -65,10 +73,35 @@ function AdminDashboard({ onLogout }) {
     setTimeout(() => setNotification(''), 4000);
   };
 
+  // Open 3-Point Verification Modal before marking successful
+  const handleInitiateSuccess = (tx) => {
+    setVerifyingTx(tx);
+    setCheckAmount(false);
+    setCheckUtr(false);
+    setCheckTime(false);
+    setAdminNote('');
+  };
+
+  const handleConfirmVerifiedSuccess = async () => {
+    if (!verifyingTx) return;
+    setIsLoading(true);
+    
+    const note = adminNote ? `Verified by Admin. ${adminNote}` : 'Verified via 3-Point Bank Cross-Check';
+    const result = await updateRemoteStatus(verifyingTx.verificationId, 'successful', note);
+    
+    if (result && result.transactions) {
+      setTransactions(result.transactions);
+    }
+    
+    setIsLoading(false);
+    setVerifyingTx(null);
+    showToast(`✓ Marked "SUCCESSFUL" for ID ${verifyingTx.verificationId}`);
+  };
+
   const handleStatusChange = async (id, newStatus) => {
     let customNote = '';
     if (newStatus === 'failed') {
-      customNote = window.prompt('Optional: Enter reason for marking payment as failed (or leave empty):', 'Invalid UTR / Credit not received');
+      customNote = window.prompt('Enter reason for marking payment as failed (or leave empty):', 'Invalid UTR / Credit not received in bank statement');
       if (customNote === null) return; // User cancelled
     }
     
@@ -133,8 +166,8 @@ function AdminDashboard({ onLogout }) {
     showToast('Exported transactions JSON.');
   };
 
-  const handleLogout = () => {
-    setAdminSession(false);
+  const handleLogout = async () => {
+    await logoutAdmin();
     onLogout();
   };
 
@@ -162,68 +195,78 @@ function AdminDashboard({ onLogout }) {
     .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
   const formatDate = (isoString) => {
-    if (!isoString) return '-';
+    if (!isoString) return 'N/A';
     try {
       return new Date(isoString).toLocaleString('en-IN', {
         day: '2-digit',
         month: 'short',
+        year: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: true
       });
     } catch {
       return isoString;
     }
   };
 
-  return (
-    <div className="admin-panel-container fade-in">
-      {/* Top Banner */}
-      <div className="admin-header-row">
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
-            <span className="admin-badge">ADMIN CONTROL PANEL</span>
-            <span className="sync-status-badge online" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}>
-              ⚡ Supabase Live Connected
-            </span>
-          </div>
-          <h1 className="admin-title">Payment Verification Dashboard</h1>
-          <p className="admin-subtitle">Logged in as: <strong>{getAdminName()}</strong></p>
+  // UTR Security Heuristics Badge
+  const getUtrStatusBadge = (utr) => {
+    if (!utr) {
+      return <span className="utr-pill badge-warning" style={{ color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>⚠️ Missing UTR</span>;
+    }
+    const check = validateUTR(utr);
+    if (!check.valid) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span className="mono utr-pill" style={{ color: '#ef4444', textDecoration: 'line-through' }}>{utr}</span>
+          <span style={{ color: '#ef4444', fontSize: '0.7rem' }}>🚨 {check.error}</span>
         </div>
-        
-        <div className="admin-top-actions">
-          <button 
-            onClick={() => loadData(true)} 
-            className="btn-action-primary"
-            disabled={isLoading}
-            title="Fetch latest responses from Supabase database"
-          >
-            {isLoading ? '⏳ Refreshing...' : '🔄 Refresh Data'}
-          </button>
-          <button onClick={() => setShowAddModal(true)} className="btn-action-secondary">
-            + New
-          </button>
-          <button onClick={handleExportData} className="btn-action-secondary">
-            💾 Export
-          </button>
-          <button onClick={handleClearAll} className="btn-action-danger" title="Delete all previous entries">
-            🗑️ Clear All
-          </button>
-          <button onClick={handleLogout} className="btn-action-danger">
-            🚪 Logout
-          </button>
-        </div>
-      </div>
+      );
+    }
+    return <span className="mono utr-pill" style={{ color: '#10b981', fontWeight: 600 }}>{utr}</span>;
+  };
 
+  return (
+    <div className="admin-dashboard-root fade-in">
+      {/* Top Notification Bar */}
       {notification && (
-        <div className="admin-toast fade-in">
+        <div className="admin-toast-notification fade-in">
           {notification}
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-label">Total Requests</div>
+      {/* Header with Title and Actions */}
+      <div className="admin-dashboard-header">
+        <div>
+          <h2>Payment Verification Center</h2>
+          <p className="admin-welcome-text">
+            Logged in as: <strong>{getAdminName()}</strong> • Secured Session
+          </p>
+        </div>
+        <div className="admin-header-actions">
+          <button onClick={() => loadData(true)} className="btn-secondary" title="Sync live updates">
+            🔄 Sync
+          </button>
+          <button onClick={() => setShowAddModal(true)} className="btn-secondary" title="Add manual entry">
+            + Add Manual
+          </button>
+          <button onClick={handleExportData} className="btn-secondary" title="Export as JSON">
+            📥 Export
+          </button>
+          <button onClick={handleClearAll} className="btn-danger-outline" title="Delete all records">
+            Clear All
+          </button>
+          <button onClick={handleLogout} className="btn-logout" title="Sign out">
+            Logout
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Summary Cards */}
+      <div className="admin-stats-grid">
+        <div className="stat-card stat-total">
+          <div className="stat-label">📋 Total Payments</div>
           <div className="stat-value">{totalCount}</div>
         </div>
         <div className="stat-card stat-pending">
@@ -303,7 +346,7 @@ function AdminDashboard({ onLogout }) {
                   <th>ID & Date</th>
                   <th>Payer Details</th>
                   <th>Purpose & Amount</th>
-                  <th>UTR / Ref</th>
+                  <th>UTR / Security Check</th>
                   <th>Current Status</th>
                   <th>Verification Actions</th>
                 </tr>
@@ -326,11 +369,7 @@ function AdminDashboard({ onLogout }) {
                       {t.source && <span className="source-tag">{t.source}</span>}
                     </td>
                     <td>
-                      {t.utr ? (
-                        <span className="mono utr-pill">{t.utr}</span>
-                      ) : (
-                        <span className="text-muted-small">-</span>
-                      )}
+                      {getUtrStatusBadge(t.utr)}
                     </td>
                     <td>
                       <span className={`status-badge-pill ${t.status || 'pending'}`}>
@@ -338,6 +377,11 @@ function AdminDashboard({ onLogout }) {
                         {t.status === 'successful' && '✅ Successful'}
                         {t.status === 'failed' && '❌ Failed'}
                       </span>
+                      {t.verifiedBy && (
+                        <div style={{ fontSize: '0.7rem', color: '#10b981', marginTop: '3px' }}>
+                          By: {t.verifiedBy}
+                        </div>
+                      )}
                       {t.notes && (
                         <div className="tx-note-text" title={t.notes}>
                           Note: {t.notes}
@@ -348,11 +392,11 @@ function AdminDashboard({ onLogout }) {
                       <div className="action-buttons-group">
                         <button
                           className="btn-mark-success"
-                          title="Mark as Payment Successful"
+                          title="Verify Bank Credit & Mark Successful"
                           disabled={t.status === 'successful' || isLoading}
-                          onClick={() => handleStatusChange(t.verificationId, 'successful')}
+                          onClick={() => handleInitiateSuccess(t)}
                         >
-                          ✓ Success
+                          ✓ Verify
                         </button>
                         <button
                           className="btn-mark-fail"
@@ -386,6 +430,112 @@ function AdminDashboard({ onLogout }) {
           </div>
         )}
       </div>
+
+      {/* 3-POINT MATCH VERIFICATION MODAL (Layer 4 Fraud Prevention) */}
+      {verifyingTx && (
+        <div className="modal-backdrop" onClick={() => setVerifyingTx(null)}>
+          <div className="modal-dialog glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>🛡️</span> 3-Point Bank Cross-Check
+              </h3>
+              <button className="modal-close" onClick={() => setVerifyingTx(null)}>&times;</button>
+            </div>
+            
+            <div className="verification-checklist-body">
+              <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+                To protect against UPI spoof apps and fake UTR scams, confirm all 3 cross-check rules against your ICICI / bank statement before approving:
+              </p>
+
+              <div className="target-tx-summary" style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '8px', marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: '#94a3b8' }}>Payer:</span>
+                  <strong>{verifyingTx.name}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: '#94a3b8' }}>Required Amount:</span>
+                  <strong style={{ color: '#38bdf8', fontSize: '1.1rem' }}>₹{verifyingTx.amount}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Submitted UTR:</span>
+                  <strong className="mono" style={{ color: verifyingTx.utr ? '#a7f3d0' : '#f87171' }}>
+                    {verifyingTx.utr || '⚠️ No UTR Provided'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* 3-Point Checklist */}
+              <div className="checklist-items" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '1.5rem' }}>
+                <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={checkAmount} 
+                    onChange={(e) => setCheckAmount(e.target.checked)}
+                    style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: '#10b981' }}
+                  />
+                  <span>
+                    <strong>1. Exact Amount Check:</strong> I have confirmed that exactly <strong>₹{verifyingTx.amount}</strong> has been credited to my bank account (not ₹1 or lesser).
+                  </span>
+                </label>
+
+                <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={checkUtr} 
+                    onChange={(e) => setCheckUtr(e.target.checked)}
+                    style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: '#10b981' }}
+                  />
+                  <span>
+                    <strong>2. Bank UTR Match:</strong> The 12-digit reference number <strong>{verifyingTx.utr || '(No UTR)'}</strong> appears in my bank passbook/SMS credit alert.
+                  </span>
+                </label>
+
+                <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={checkTime} 
+                    onChange={(e) => setCheckTime(e.target.checked)}
+                    style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: '#10b981' }}
+                  />
+                  <span>
+                    <strong>3. Timestamp Alignment:</strong> Credit was received around {formatDate(verifyingTx.createdAt)}.
+                  </span>
+                </label>
+              </div>
+
+              <div className="form-group">
+                <label style={{ fontSize: '0.85rem' }}>Optional Audit Note / Memo</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Verified in ICICI mobile app statement"
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '1.25rem' }}>
+                <button
+                  type="button"
+                  className="submit-btn"
+                  style={{ background: (!checkAmount || !checkUtr) ? '#475569' : '#10b981' }}
+                  disabled={!checkAmount || !checkUtr || isLoading}
+                  onClick={handleConfirmVerifiedSuccess}
+                >
+                  {isLoading ? 'Verifying...' : '✓ Confirm & Unlock Official Receipt'}
+                </button>
+                <button
+                  type="button"
+                  className="back-btn"
+                  onClick={() => setVerifyingTx(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Manual Entry Modal */}
       {showAddModal && (

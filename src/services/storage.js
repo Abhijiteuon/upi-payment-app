@@ -32,6 +32,7 @@ export const toClientTx = (row) => {
     utr: row.utr || '',
     status: row.status || 'pending',
     notes: row.notes || '',
+    verifiedBy: row.verified_by || null,
     createdAt: row.created_at || new Date().toISOString(),
     verifiedAt: row.verified_at || null
   };
@@ -345,6 +346,17 @@ export const updateRemoteStatus = async (verificationId, status, notes = '', utr
   const query = (verificationId || '').trim().toUpperCase();
   const localList = getTransactions();
 
+  // Get current admin info for audit
+  let currentAdminEmail = 'Admin';
+  try {
+    const { data: authData } = await supabase.auth.getUser();
+    if (authData?.user?.email) {
+      currentAdminEmail = authData.user.email;
+    }
+  } catch {
+    // fallback
+  }
+
   const updateFields = {
     status,
     notes: notes !== undefined ? notes : ''
@@ -352,8 +364,10 @@ export const updateRemoteStatus = async (verificationId, status, notes = '', utr
 
   if (status === 'successful') {
     updateFields.verified_at = new Date().toISOString();
+    updateFields.verified_by = currentAdminEmail;
   } else if (status === 'pending') {
     updateFields.verified_at = null;
+    updateFields.verified_by = null;
   }
 
   if (utr) {
@@ -368,7 +382,8 @@ export const updateRemoteStatus = async (verificationId, status, notes = '', utr
         status,
         notes: notes !== undefined && notes !== '' ? notes : t.notes,
         utr: utr || t.utr,
-        verifiedAt: updateFields.verified_at !== undefined ? updateFields.verified_at : t.verifiedAt
+        verifiedAt: updateFields.verified_at !== undefined ? updateFields.verified_at : t.verifiedAt,
+        verifiedBy: updateFields.verified_by !== undefined ? updateFields.verified_by : t.verifiedBy
       };
       return targetTx;
     }
@@ -387,6 +402,7 @@ export const updateRemoteStatus = async (verificationId, status, notes = '', utr
       utr: utr || '',
       status,
       verifiedAt: updateFields.verified_at || null,
+      verifiedBy: updateFields.verified_by || null,
       notes
     };
     updatedLocal.unshift(targetTx);
@@ -394,15 +410,39 @@ export const updateRemoteStatus = async (verificationId, status, notes = '', utr
 
   saveTransactions(updatedLocal);
 
-  // 1. Post to Google Forms so Google Sheet row updates with status!
+  // 1. Post to Google Forms so Google Sheet row updates with status
   submitToGoogleForm(targetTx, status);
 
   // 2. Sync to Supabase so real-time WebSocket fires immediately
   try {
-    await supabase
+    const { error } = await supabase
       .from('transactions')
       .update(updateFields)
       .eq('verification_id', query);
+
+    if (error) {
+      if (error.code === '23505') {
+        return { 
+          success: false, 
+          error: 'Duplicate UTR detected. This UPI reference number has already been registered on another transaction to prevent double-spending.' 
+        };
+      }
+      console.error('Supabase updateRemoteStatus error:', error);
+      return { success: false, error: error.message };
+    }
+
+    // 3. Write immutable audit log
+    try {
+      await supabase.from('transaction_audit_logs').insert([{
+        verification_id: query,
+        action: `STATUS_${status.toUpperCase()}`,
+        new_status: status,
+        performed_by: currentAdminEmail,
+        notes: notes || ''
+      }]);
+    } catch {
+      // non-blocking
+    }
   } catch (err) {
     console.error('Supabase updateRemoteStatus error:', err);
   }
@@ -493,41 +533,115 @@ export const subscribeToAllTransactions = (onChange) => {
 };
 
 // =========================================================================
-// ADMIN AUTHENTICATION
+// ADMIN AUTHENTICATION (Supabase Auth & Session Management)
 // =========================================================================
 
-export const ADMIN_USERS = [
-  {
-    name: 'abhijit',
-    nickname: 'gopu',
-    password: 'Arya@2709',
-    displayName: 'Abhijit Kumar (Gopu)'
-  },
-  {
-    name: 'arya',
-    nickname: 'komal',
-    password: 'Imdbest@2711',
-    displayName: 'Arya (Komal)'
-  }
-];
-
-export const validateAdminCredentials = (name, nickname, password) => {
-  const cleanName = (name || '').trim().toLowerCase();
-  const cleanNickname = (nickname || '').trim().toLowerCase();
+/**
+ * Sign in admin using secure Supabase Authentication (JWT tokens)
+ */
+export const loginAdminWithSupabase = async (email, password) => {
+  const cleanEmail = (email || '').trim();
   const cleanPassword = (password || '').trim();
 
-  const matched = ADMIN_USERS.find(
-    admin => admin.name === cleanName && admin.nickname === cleanNickname && admin.password === cleanPassword
-  );
+  if (!cleanEmail || !cleanPassword) {
+    return { success: false, error: 'Email and password are required.' };
+  }
 
-  return matched || null;
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: cleanPassword
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (data?.session && data?.user) {
+      sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+      sessionStorage.setItem('upi_admin_name', data.user.email || 'Admin');
+      return { success: true, user: data.user, session: data.session };
+    }
+
+    return { success: false, error: 'Authentication failed. Please verify credentials.' };
+  } catch (err) {
+    console.error('Supabase login error:', err);
+    return { success: false, error: err.message || 'Authentication error.' };
+  }
+};
+
+/**
+ * Register a new Admin account in Supabase Auth (for initial dashboard setup)
+ */
+export const registerAdminWithSupabase = async (email, password) => {
+  const cleanEmail = (email || '').trim();
+  const cleanPassword = (password || '').trim();
+
+  if (!cleanEmail || !cleanPassword) {
+    return { success: false, error: 'Email and password are required.' };
+  }
+
+  if (cleanPassword.length < 6) {
+    return { success: false, error: 'Password must be at least 6 characters long.' };
+  }
+
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password: cleanPassword
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (data?.session) {
+      sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+      sessionStorage.setItem('upi_admin_name', data.user?.email || 'Admin');
+    }
+
+    return { 
+      success: true, 
+      user: data.user, 
+      session: data.session,
+      requiresEmailConfirmation: !data?.session
+    };
+  } catch (err) {
+    console.error('Supabase register error:', err);
+    return { success: false, error: err.message || 'Registration failed.' };
+  }
+};
+
+/**
+ * Logs out the active admin session
+ */
+export const logoutAdmin = async () => {
+  try {
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.warn('Sign out notice:', err);
+  }
+  sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  sessionStorage.removeItem('upi_admin_name');
+};
+
+/**
+ * Retrieve the current authenticated Supabase user
+ */
+export const getCurrentAdminUser = async () => {
+  try {
+    const { data } = await supabase.auth.getUser();
+    return data?.user || null;
+  } catch {
+    return null;
+  }
 };
 
 export const setAdminSession = (adminProfile) => {
   if (adminProfile) {
     sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
-    const displayName = typeof adminProfile === 'object' && adminProfile.displayName 
-      ? adminProfile.displayName 
+    const displayName = typeof adminProfile === 'object' && adminProfile.email 
+      ? adminProfile.email 
       : (typeof adminProfile === 'string' ? adminProfile : 'Admin');
     sessionStorage.setItem('upi_admin_name', displayName);
   } else {
@@ -537,7 +651,7 @@ export const setAdminSession = (adminProfile) => {
 };
 
 export const getAdminName = () => {
-  return sessionStorage.getItem('upi_admin_name') || 'Abhijit Kumar (Gopu)';
+  return sessionStorage.getItem('upi_admin_name') || 'Admin';
 };
 
 export const getAdminSession = () => {

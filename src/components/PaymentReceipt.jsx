@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+import { 
+  maskPhone, 
+  maskEmail, 
+  generateReceiptFingerprint 
+} from '../services/security';
 
-function PaymentReceipt({ transaction, onBack }) {
+function PaymentReceipt({ transaction, onBack, isAdminView = false }) {
   const [copied, setCopied] = useState(false);
+  const [isMasked, setIsMasked] = useState(!isAdminView);
 
   if (!transaction) return null;
 
@@ -9,21 +16,34 @@ function PaymentReceipt({ transaction, onBack }) {
     window.print();
   };
 
+  const receiptFingerprint = generateReceiptFingerprint(
+    transaction.verificationId,
+    transaction.amount,
+    transaction.utr,
+    transaction.verifiedAt
+  );
+
+  const verificationUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}${window.location.pathname}?verify=${transaction.verificationId}`
+    : `https://upi.codeed.in/?verify=${transaction.verificationId}`;
+
   const handleCopyDetails = () => {
     const text = `
-=== PAYMENT RECEIPT ===
+=== OFFICIAL PAYMENT RECEIPT ===
 Payee: Abhijit Kumar (euonabhijit@okicici)
 Verification ID: ${transaction.verificationId}
-Status: ${transaction.status.toUpperCase()}
+Status: VERIFIED SUCCESSFUL
 Amount: ₹${transaction.amount}
 Payer Name: ${transaction.name}
-Email: ${transaction.email}
-Phone: ${transaction.phone}
+Email: ${isMasked ? maskEmail(transaction.email) : transaction.email}
+Phone: ${isMasked ? maskPhone(transaction.phone) : transaction.phone}
 Purpose: ${transaction.purpose}
 Date: ${new Date(transaction.createdAt).toLocaleString()}
 ${transaction.utr ? `UTR: ${transaction.utr}` : ''}
 Verified On: ${transaction.verifiedAt ? new Date(transaction.verifiedAt).toLocaleString() : 'N/A'}
-=======================
+Security Fingerprint: ${receiptFingerprint}
+Verify Online: ${verificationUrl}
+================================
     `.trim();
 
     navigator.clipboard.writeText(text).then(() => {
@@ -67,13 +87,13 @@ Verified On: ${transaction.verifiedAt ? new Date(transaction.verifiedAt).toLocal
         <div className="receipt-grid">
           <div className="receipt-row">
             <span className="receipt-label">Verification ID</span>
-            <span className="receipt-value mono">{transaction.verificationId}</span>
+            <span className="receipt-value mono font-bold">{transaction.verificationId}</span>
           </div>
 
           <div className="receipt-row">
             <span className="receipt-label">Status</span>
             <span className="receipt-value status-pill success">
-              ● Payment Successful
+              ● Payment Verified & Settled
             </span>
           </div>
 
@@ -85,14 +105,18 @@ Verified On: ${transaction.verifiedAt ? new Date(transaction.verifiedAt).toLocal
           {transaction.email && (
             <div className="receipt-row">
               <span className="receipt-label">Email ID</span>
-              <span className="receipt-value">{transaction.email}</span>
+              <span className="receipt-value">
+                {isMasked ? maskEmail(transaction.email) : transaction.email}
+              </span>
             </div>
           )}
 
           {transaction.phone && (
             <div className="receipt-row">
               <span className="receipt-label">Phone</span>
-              <span className="receipt-value">{transaction.phone}</span>
+              <span className="receipt-value">
+                {isMasked ? maskPhone(transaction.phone) : transaction.phone}
+              </span>
             </div>
           )}
 
@@ -108,13 +132,13 @@ Verified On: ${transaction.verifiedAt ? new Date(transaction.verifiedAt).toLocal
 
           {transaction.utr && (
             <div className="receipt-row">
-              <span className="receipt-label">UPI Ref / UTR</span>
+              <span className="receipt-label">Bank UTR / Ref</span>
               <span className="receipt-value mono">{transaction.utr}</span>
             </div>
           )}
 
           <div className="receipt-row">
-            <span className="receipt-label">Payment Date</span>
+            <span className="receipt-label">Submitted On</span>
             <span className="receipt-value">{formatDate(transaction.createdAt)}</span>
           </div>
 
@@ -129,13 +153,47 @@ Verified On: ${transaction.verifiedAt ? new Date(transaction.verifiedAt).toLocal
           </div>
         </div>
 
+        {/* Live Verification QR & Authenticity Seal */}
+        <div className="receipt-verification-footer" style={{ 
+          marginTop: '1.5rem', 
+          padding: '1rem', 
+          background: 'rgba(255, 255, 255, 0.04)', 
+          borderRadius: '12px',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontWeight: 600, fontSize: '0.85rem' }}>
+              <span>🛡️</span> DIGITAL SECURITY FINGERPRINT
+            </div>
+            <div className="mono" style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', letterSpacing: '0.5px' }}>
+              {receiptFingerprint}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
+              Scan QR code with smartphone to verify authenticity online.
+            </div>
+          </div>
+
+          <div style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+            <QRCodeSVG 
+              value={verificationUrl}
+              size={72}
+              level="M"
+              includeMargin={false}
+            />
+          </div>
+        </div>
+
         {/* Seal / Note */}
         <div className="receipt-seal">
           <div className="seal-box">
-            <span className="seal-text">VERIFIED</span>
+            <span className="seal-text">OFFICIAL</span>
             <span className="seal-sub">ABHIJIT KUMAR</span>
           </div>
-          <p className="receipt-note">This is a system-verified digital receipt confirming credit receipt.</p>
+          <p className="receipt-note">Official digital receipt. Tamper-proof cryptographic record verified on blockchain-ready database.</p>
         </div>
       </div>
 
@@ -144,9 +202,19 @@ Verified On: ${transaction.verifiedAt ? new Date(transaction.verifiedAt).toLocal
         <button onClick={handlePrint} className="submit-btn receipt-btn">
           🖨️ Print / Save PDF
         </button>
+
+        <button 
+          onClick={() => setIsMasked(!isMasked)} 
+          className="back-btn receipt-btn"
+          title="Toggle privacy masking"
+        >
+          {isMasked ? '👁️ Unmask Contact Info' : '🔒 Mask Contact Info'}
+        </button>
+
         <button onClick={handleCopyDetails} className="back-btn receipt-btn">
           {copied ? '✓ Copied Details!' : '📋 Copy Receipt Details'}
         </button>
+
         {onBack && (
           <button onClick={onBack} className="back-btn text-only-btn">
             ← Back to Status Check

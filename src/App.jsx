@@ -1,9 +1,23 @@
 import React, { useState, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import Navbar from './components/Navbar';
 import StatusCheck from './components/StatusCheck';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
-import { addTransaction, getAdminSession, setAdminSession, updateTransactionStatus, submitToGoogleForm } from './services/storage';
+import { 
+  addTransaction, 
+  getAdminSession, 
+  updateTransactionStatus, 
+  submitToGoogleForm,
+  logoutAdmin
+} from './services/storage';
+import { 
+  validateUTR, 
+  validatePhone, 
+  validateEmail, 
+  validateAmount, 
+  sanitizeText 
+} from './services/security';
 import './index.css';
 
 function App() {
@@ -23,6 +37,10 @@ function App() {
     utr: ''
   });
 
+  // Validation errors
+  const [formError, setFormError] = useState('');
+  const [utrError, setUtrError] = useState('');
+
   // Payment step: 'form' | 'qr' | 'confirmed'
   const [paymentStep, setPaymentStep] = useState('form');
   const [createdTransaction, setCreatedTransaction] = useState(null);
@@ -30,43 +48,127 @@ function App() {
   const [isCopiedId, setIsCopiedId] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize admin session check
+  // Initialize admin session check & URL parameter detection
   useEffect(() => {
     setIsAdminLoggedIn(getAdminSession());
+
+    // Deep link support for receipt verification (e.g. ?verify=VER-8F2K9M)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const verifyParam = params.get('verify') || params.get('check');
+      if (verifyParam) {
+        setActiveVerificationId(verifyParam.trim().toUpperCase());
+        setCurrentView('status');
+      }
+    } catch {
+      // ignore in environments without window.location.search
+    }
   }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (formError) setFormError('');
+    if (name === 'utr' && utrError) setUtrError('');
   };
 
-  // Step 1 -> Step 2: Proceed to Pay
+  // Step 1 -> Step 2: Proceed to Pay with Full Input Validation
   const handleProceedToPay = async (e) => {
     e.preventDefault();
-    if (formData.name && formData.amount && formData.purpose && formData.source) {
-      setIsSubmitting(true);
+    setFormError('');
+
+    // 1. Sanitize & Validate Name
+    const cleanName = sanitizeText(formData.name, 80);
+    if (!cleanName || cleanName.length < 2) {
+      setFormError('Please enter a valid full name (minimum 2 characters).');
+      return;
+    }
+
+    // 2. Validate Email
+    const emailRes = validateEmail(formData.email);
+    if (!emailRes.valid) {
+      setFormError(emailRes.error);
+      return;
+    }
+
+    // 3. Validate Phone
+    const phoneRes = validatePhone(formData.phone);
+    if (!phoneRes.valid) {
+      setFormError(phoneRes.error);
+      return;
+    }
+
+    // 4. Validate Amount
+    const amountRes = validateAmount(formData.amount);
+    if (!amountRes.valid) {
+      setFormError(amountRes.error);
+      return;
+    }
+
+    // 5. Validate Purpose & Source
+    if (!formData.purpose) {
+      setFormError('Please select a purpose of payment.');
+      return;
+    }
+    if (!formData.source) {
+      setFormError('Please select the payment source type.');
+      return;
+    }
+
+    const sanitizedData = {
+      ...formData,
+      name: cleanName,
+      email: emailRes.clean,
+      phone: phoneRes.clean,
+      amount: amountRes.num
+    };
+
+    setIsSubmitting(true);
+    try {
       // Create internal transaction record in Supabase
-      const tx = await addTransaction(formData);
+      const tx = await addTransaction(sanitizedData);
       setCreatedTransaction(tx);
       setActiveVerificationId(tx.verificationId);
-      setIsSubmitting(false);
       setPaymentStep('qr');
+    } catch (err) {
+      console.error('Payment registration error:', err);
+      setFormError('Failed to register payment session. Please check connection and try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Step 2 -> Step 3: User confirms payment made
+  // Step 2 -> Step 3: User confirms payment made with UTR fraud check
   const handleConfirmPaid = async () => {
+    setUtrError('');
+    const rawUtr = formData.utr ? formData.utr.trim() : '';
+
+    if (rawUtr) {
+      const utrCheck = validateUTR(rawUtr);
+      if (!utrCheck.valid) {
+        setUtrError(utrCheck.error);
+        return;
+      }
+    }
+
     if (createdTransaction) {
       setIsSubmitting(true);
-      const updatedTx = { ...createdTransaction, utr: formData.utr };
+      const updatedTx = { ...createdTransaction, utr: rawUtr };
       submitToGoogleForm(updatedTx, 'pending');
-      if (formData.utr) {
-        await updateTransactionStatus(
+
+      if (rawUtr) {
+        const updateResult = await updateTransactionStatus(
           createdTransaction.verificationId, 
           'pending', 
-          `User submitted UTR: ${formData.utr}`, 
-          formData.utr
+          `User submitted UTR: ${rawUtr}`, 
+          rawUtr
         );
+
+        if (updateResult && !updateResult.success && updateResult.error) {
+          setUtrError(updateResult.error);
+          setIsSubmitting(false);
+          return;
+        }
       }
       setIsSubmitting(false);
     }
@@ -98,6 +200,8 @@ function App() {
       email: '',
       utr: ''
     });
+    setFormError('');
+    setUtrError('');
     setPaymentStep('form');
     setCreatedTransaction(null);
     setCurrentView('pay');
@@ -110,9 +214,9 @@ function App() {
     }
   };
 
-  const handleAdminLogout = () => {
+  const handleAdminLogout = async () => {
+    await logoutAdmin();
     setIsAdminLoggedIn(false);
-    setAdminSession(false);
     setCurrentView('pay');
   };
 
@@ -154,8 +258,17 @@ function App() {
                       />
                       <span className="pay-text-gradient">Securely</span>
                     </h1>
-                    <p>Enter your payment details to generate a secure UPI transaction</p>
+                    <p>Enter your payment details to generate a verified UPI transaction</p>
                   </div>
+
+                  {formError && (
+                    <div className="status-alert alert-error fade-in" style={{ marginBottom: '1.25rem' }}>
+                      <div className="alert-icon">⚠️</div>
+                      <div className="alert-body">
+                        <p>{formError}</p>
+                      </div>
+                    </div>
+                  )}
 
                   <form onSubmit={handleProceedToPay}>
                     <div className="form-group">
@@ -168,6 +281,7 @@ function App() {
                         placeholder="Enter your full name"
                         value={formData.name}
                         onChange={handleChange}
+                        maxLength={80}
                         required
                       />
                     </div>
@@ -179,7 +293,7 @@ function App() {
                         id="email"
                         name="email"
                         className="form-control"
-                        placeholder="Enter your email address"
+                        placeholder="e.g. name@example.com"
                         value={formData.email}
                         onChange={handleChange}
                         required
@@ -193,9 +307,10 @@ function App() {
                         id="phone"
                         name="phone"
                         className="form-control"
-                        placeholder="Enter 10-digit mobile number"
+                        placeholder="10-digit mobile (e.g. 9876543210)"
                         value={formData.phone}
                         onChange={handleChange}
+                        maxLength={15}
                         required
                       />
                     </div>
@@ -244,6 +359,7 @@ function App() {
                           className="form-control"
                           placeholder="0.00"
                           min="1"
+                          max="100000"
                           step="0.01"
                           value={formData.amount}
                           onChange={handleChange}
@@ -253,25 +369,26 @@ function App() {
                     </div>
 
                     <button type="submit" className="submit-btn" disabled={isSubmitting}>
-                      {isSubmitting ? 'Creating Verification...' : `Proceed to Pay ₹${formData.amount || '0.00'}`}
+                      {isSubmitting ? 'Securing Transaction...' : `Proceed to Pay ₹${formData.amount || '0.00'}`}
                     </button>
                   </form>
                 </div>
               )}
 
-              {/* STEP 2: QR & UPI PAYMENT SCREEN */}
+              {/* STEP 2: LOCAL PRIVACY-SAFE QR & UPI PAYMENT SCREEN */}
               {paymentStep === 'qr' && (
                 <div className="fade-in qr-placeholder">
                   <div className="step-indicator">Step 2 of 3: Complete Payment</div>
                   <h3>Scan to Pay ₹{formData.amount}</h3>
                   <p className="pay-purpose-tag">Purpose: {formData.purpose}</p>
                   
-                  {/* Dynamic QR */}
-                  <div className="qr-box">
-                    <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiLink)}`} 
-                      alt="UPI QR Code" 
-                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  {/* Dynamic Local QR (No external server leaks) */}
+                  <div className="qr-box" style={{ background: '#ffffff', padding: '12px', borderRadius: '16px', display: 'inline-flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <QRCodeSVG 
+                      value={upiLink} 
+                      size={180}
+                      level="H"
+                      includeMargin={false}
                     />
                   </div>
                   
@@ -306,18 +423,24 @@ function App() {
                       name="utr"
                       className="form-control mono-input"
                       placeholder="e.g. 410293847561"
-                      maxLength={16}
+                      maxLength={12}
                       value={formData.utr}
                       onChange={handleChange}
                     />
-                    <small style={{ color: '#94a3b8', fontSize: '0.8rem', display: 'block', marginTop: '0.3rem' }}>
-                      💡 Providing the UTR allows instant verification against bank records.
-                    </small>
+                    {utrError ? (
+                      <div className="status-alert alert-error fade-in" style={{ marginTop: '0.5rem', padding: '0.6rem 0.8rem' }}>
+                        <span style={{ fontSize: '0.85rem' }}>⚠️ {utrError}</span>
+                      </div>
+                    ) : (
+                      <small style={{ color: '#94a3b8', fontSize: '0.8rem', display: 'block', marginTop: '0.3rem' }}>
+                        💡 12-digit bank reference number enables instant verification.
+                      </small>
+                    )}
                   </div>
                   
                   <div className="qr-footer-actions">
                     <button onClick={handleConfirmPaid} className="submit-btn continue-pay-btn" disabled={isSubmitting}>
-                      {isSubmitting ? 'Submitting...' : '✓ I Have Made the Payment (Continue)'}
+                      {isSubmitting ? 'Verifying...' : '✓ I Have Made the Payment (Continue)'}
                     </button>
 
                     <button onClick={() => setPaymentStep('form')} className="back-btn">
