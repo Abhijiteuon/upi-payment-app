@@ -170,7 +170,7 @@ export const maskName = (name) => {
  * Derived from verification ID, amount, UTR, and timestamp.
  */
 export const generateReceiptFingerprint = (verificationId, amount, utr, verifiedAt) => {
-  const seed = `${verificationId || ''}|${parseFloat(amount || 0).toFixed(2)}|${utr || 'NO_UTR'}|${verifiedAt || 'PENDING'}|CODEED_SECURE_PAY_2026`;
+  const seed = `${verificationId || ''}|${parseFloat(amount || 0).toFixed(2)}|${utr || 'NO_UTR'}|${verifiedAt || 'PENDING'}|CLOAK_SECURE_PAY_2026`;
   
   // Fast 32-bit FNV-1a & Murmur3-like dual hashing for synchronous browser render
   let h1 = 0xdeadbeef ^ seed.length;

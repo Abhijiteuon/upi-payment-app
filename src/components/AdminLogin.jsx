@@ -62,7 +62,7 @@ function AdminLogin({ onLoginSuccess, onCancel }) {
             type="email"
             id="admin-email"
             className="form-control"
-            placeholder="admin@codeed.in"
+            placeholder="admin@cloak.security"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required

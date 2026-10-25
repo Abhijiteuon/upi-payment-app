@@ -1,16 +1,22 @@
-# React + Vite
+# CLOAK — Credential-less Link for Online Auth & Keys
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+> **CLOAK** is an institutional-grade, privacy-first UPI payment and settlement verification platform equipped with a 5-layer anti-fraud security architecture.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Security Layers
 
-## React Compiler
+1. **Client-Side Hardening & Zero-Leak QR**: Local vector SVG QR code generation (`qrcode.react`), removing external API leaks of financial metadata. Strict 12-digit UTR validation with NPCI anti-spoof heuristic checks.
+2. **Identity & Access Management**: Secure JWT token authentication powered by Supabase Auth with Row-Level Security (RLS).
+3. **Database & API Integrity**: PostgreSQL RLS policies preventing unauthorized mutations, unique UTR constraint preventing replay/double-spending attacks, and database triggers locking financial amounts and verification IDs.
+4. **Fraud Detection & Settlement Protocol**: The 3-Point Bank Cross-Check verification workflow (Exact Amount + Bank UTR Match + Timestamp Alignment).
+5. **Data Privacy & Cryptographic Verification**: Masked PII on public receipts and status queries, coupled with a tamper-evident digital receipt fingerprint (HMAC-SHA-256 equivalent) and live scan-to-verify QR codes.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+- **Frontend**: React 19, Vite
+- **Database & Auth**: Supabase (PostgreSQL with Row Level Security, Supabase Auth)
+- **Deployment**: GitHub Pages via GitHub Actions CI/CD
+- **Design System**: Obsidian & Liquid Metal (Plus Jakarta Sans & JetBrains Mono)

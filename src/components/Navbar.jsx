@@ -32,11 +32,11 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
       <header className="navbar">
         <div className="nav-container">
           {/* Brand Logo */}
-          <div className="nav-logo" onClick={() => handleNavClick('pay')}>
-            <img src="/codeed-icon.png" alt="codeED" className="nav-logo-img" />
+          <div className="nav-logo" onClick={() => handleNavClick('pay')} title="CLOAK — Credential-less Link for Online Auth & Keys">
+            <img src="/codeed-icon.png" alt="CLOAK" className="nav-logo-img" />
             <div className="nav-brand-text">
-              <span className="logo-text">codeED</span>
-              <span className="logo-badge">PAY</span>
+              <span className="logo-text">CLOAK</span>
+              <span className="logo-badge">AUTH & KEYS</span>
             </div>
           </div>
 
@@ -127,8 +127,13 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
       <aside className={`nav-drawer ${isOpen ? 'open' : ''}`}>
         <div className="drawer-header">
           <div className="drawer-brand">
-            <img src="/codeed-icon.png" alt="codeED" className="nav-logo-img" />
-            <span className="logo-text">codeED Pay</span>
+            <img src="/codeed-icon.png" alt="CLOAK" className="nav-logo-img" />
+            <div>
+              <span className="logo-text">CLOAK</span>
+              <span style={{ display: 'block', fontSize: '0.62rem', color: '#94a3b8', letterSpacing: '0.04em' }}>
+                Credential-less Link for Online Auth & Keys
+              </span>
+            </div>
           </div>
           <button 
             className="drawer-close-btn"

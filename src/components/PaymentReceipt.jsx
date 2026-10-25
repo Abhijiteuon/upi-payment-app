@@ -35,7 +35,7 @@ function PaymentReceipt({ transaction, onBack, isAdminView = false }) {
 
   const verificationUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}${window.location.pathname}?verify=${transaction.verificationId}`
-    : `https://upi.codeed.in/?verify=${transaction.verificationId}`;
+    : `https://cloak.pay/?verify=${transaction.verificationId}`;
 
   const handleCopyDetails = () => {
     const text = `
@@ -86,10 +86,10 @@ Verify Online: ${verificationUrl}
         <div className="receipt-header-row">
           <div className="receipt-brand-col">
             <div className="receipt-brand-badge">
-              <img src="/codeed-icon.png" alt="codeED" className="receipt-brand-logo" />
+              <img src="/codeed-icon.png" alt="CLOAK" className="receipt-brand-logo" />
               <div>
-                <span className="brand-name">codeED</span>
-                <span className="brand-product">PAYMENT SETTLEMENTS</span>
+                <span className="brand-name">CLOAK</span>
+                <span className="brand-product">CREDENTIAL-LESS LINK FOR ONLINE AUTH & KEYS</span>
               </div>
             </div>
             <div className="receipt-voucher-number">
@@ -184,13 +184,13 @@ Verify Online: ${verificationUrl}
           <div className="seal-meta-col">
             <div className="seal-title">
               <IconLock size={14} className="text-emerald" />
-              <span>CRYPTOGRAPHIC AUDIT SEAL</span>
+              <span>CLOAK CRYPTOGRAPHIC AUDIT SEAL</span>
             </div>
             <div className="seal-fingerprint mono">
               {receiptFingerprint}
             </div>
             <div className="seal-description">
-              Tamper-evident hash generated from Verification ID, settled amount, and banking timestamp. Scan QR to authenticate.
+              Tamper-evident hash generated from Verification ID, settled amount, and banking timestamp via CLOAK protocol. Scan QR to authenticate.
             </div>
           </div>
 

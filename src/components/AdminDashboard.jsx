@@ -286,7 +286,7 @@ function AdminDashboard({ onLogout }) {
         <div>
           <div className="admin-badge-row">
             <span className="admin-live-pulse"></span>
-            <span className="admin-badge-text">SETTLEMENT VERIFICATION CONSOLE</span>
+            <span className="admin-badge-text">CLOAK SETTLEMENT CONSOLE</span>
           </div>
           <h2 className="admin-page-heading">Treasury & Reconciliation</h2>
           <p className="admin-session-text">
@@ -637,7 +637,7 @@ function AdminDashboard({ onLogout }) {
                 <input
                   type="email"
                   className="form-control"
-                  placeholder="e.g. arya@codeed.in"
+                  placeholder="e.g. arya@cloak.security"
                   value={newAdminEmail}
                   onChange={(e) => setNewAdminEmail(e.target.value)}
                   required

@@ -279,13 +279,13 @@ function App() {
                   <div className="card-header-block">
                     <div className="header-meta-pill">
                       <IconShieldCheck size={14} className="text-emerald" />
-                      <span>DIRECT INSTANT SETTLEMENT</span>
+                      <span>CLOAK PROTOCOL · DIRECT SETTLEMENT</span>
                     </div>
                     <h1 className="main-title">
                       Initiate Payment
                     </h1>
                     <p className="sub-title">
-                      Complete payer details to generate a verified NPCI UPI transaction session
+                      CLOAK (Credential-less Link for Online Auth & Keys) — Generate a verified, tamper-proof transaction session
                     </p>
                   </div>
 
