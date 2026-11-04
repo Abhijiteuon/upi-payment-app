@@ -111,6 +111,41 @@ export const validateAmount = (amount) => {
 };
 
 /**
+ * Validates standard Indian UPI ID / VPA (e.g. name@okaxis, user@icici)
+ */
+export const validateUPI = (upi) => {
+  if (!upi || typeof upi !== 'string') {
+    return { valid: false, error: 'UPI ID is required.' };
+  }
+  const clean = upi.trim().toLowerCase();
+  const vpaRegex = /^[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,32}$/;
+  if (!vpaRegex.test(clean)) {
+    return { 
+      valid: false, 
+      error: 'Please enter a valid UPI ID (e.g., username@bank or mobile@paytm).' 
+    };
+  }
+  return { valid: true, clean };
+};
+
+/**
+ * Validates merchant username/handle for personalized payment links
+ */
+export const validateUsername = (username) => {
+  if (!username || typeof username !== 'string') {
+    return { valid: false, error: 'Username is required.' };
+  }
+  const clean = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  if (clean.length < 3 || clean.length > 30) {
+    return { 
+      valid: false, 
+      error: 'Username must be between 3 and 30 characters (alphanumeric, dashes, underscores).' 
+    };
+  }
+  return { valid: true, clean };
+};
+
+/**
  * Sanitizes generic user text input to guard against injection
  */
 export const sanitizeText = (text, maxLength = 100) => {

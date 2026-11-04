@@ -38,9 +38,12 @@ function PaymentReceipt({ transaction, onBack, isAdminView = false }) {
     : `https://cloak.pay/?verify=${transaction.verificationId}`;
 
   const handleCopyDetails = () => {
+    const payeeName = transaction.payeeDisplayName || 'Abhijit Kumar';
+    const payeeVpa = transaction.payeeUpi || 'euonabhijit@okicici';
+
     const text = `
 === OFFICIAL PAYMENT RECEIPT ===
-Payee: Abhijit Kumar (euonabhijit@okicici)
+Payee: ${payeeName} (${payeeVpa})
 Verification ID: ${transaction.verificationId}
 Status: VERIFIED & SETTLED
 Amount: ₹${Number(transaction.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -164,7 +167,7 @@ Verify Online: ${verificationUrl}
 
           <div className="receipt-detail-cell">
             <span className="cell-label">RECEIVER VPA</span>
-            <span className="cell-value mono">euonabhijit@okicici</span>
+            <span className="cell-value mono">{transaction.payeeUpi || 'euonabhijit@okicici'}</span>
           </div>
 
           <div className="receipt-detail-cell">

@@ -146,3 +146,55 @@ export const IconDownload = ({ size = 16, className = "" }) => (
     <line x1="12" x2="12" y1="15" y2="3"/>
   </svg>
 );
+
+export const IconShare = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="18" cy="5" r="3"/>
+    <circle cx="6" cy="12" r="3"/>
+    <circle cx="18" cy="19" r="3"/>
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+  </svg>
+);
+
+export const IconLink = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+  </svg>
+);
+
+export const IconQrCode = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect width="6" height="6" x="3" y="3" rx="1"/>
+    <rect width="6" height="6" x="15" y="3" rx="1"/>
+    <rect width="6" height="6" x="3" y="15" rx="1"/>
+    <path d="M21 15h-4v4h4v-4z"/>
+    <path d="M14 14h1v1h-1z"/>
+    <path d="M14 18h1v3h-1z"/>
+    <path d="M10 10h4v4h-4z"/>
+  </svg>
+);
+
+export const IconEdit = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+    <path d="m15 5 4 4"/>
+  </svg>
+);
+
+export const IconUserPlus = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <line x1="19" x2="19" y1="8" y2="14"/>
+    <line x1="22" x2="16" y1="11" y2="11"/>
+  </svg>
+);
+
+export const IconSend = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m22 2-7 20-4-9-9-4Z"/>
+    <path d="M22 2 11 13"/>
+  </svg>
+);

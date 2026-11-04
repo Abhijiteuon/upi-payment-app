@@ -2,15 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import Navbar from './components/Navbar';
 import StatusCheck from './components/StatusCheck';
-import AdminLogin from './components/AdminLogin';
-import AdminDashboard from './components/AdminDashboard';
+import AuthPortal from './components/AuthPortal';
+import UserDashboard from './components/UserDashboard';
 import { 
   addTransaction, 
   getAdminSession, 
   updateTransactionStatus, 
-  submitToGoogleForm,
-  logoutAdmin
+  submitToGoogleForm
 } from './services/storage';
+import { 
+  getPublicProfileByUsername, 
+  getActiveProfile, 
+  logoutMerchantSession,
+  DEFAULT_MERCHANT 
+} from './services/profileService';
 import { 
   validateUTR, 
   validatePhone, 
@@ -36,7 +41,12 @@ function App() {
   // Views: 'pay', 'status', 'admin'
   const [currentView, setCurrentView] = useState('pay');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [activeProfileState, setActiveProfileState] = useState(null);
   const [activeVerificationId, setActiveVerificationId] = useState('');
+
+  // Receiving Merchant / Payee Profile
+  const [payee, setPayee] = useState(DEFAULT_MERCHANT);
+  const [isPreSetAmount, setIsPreSetAmount] = useState(false);
 
   // Payment form state
   const [formData, setFormData] = useState({
@@ -62,18 +72,47 @@ function App() {
 
   // Initialize admin session check & URL parameter detection
   useEffect(() => {
-    setIsAdminLoggedIn(getAdminSession());
+    // Check logged-in merchant session
+    const loggedIn = getAdminSession();
+    setIsAdminLoggedIn(loggedIn);
+    if (loggedIn) {
+      const activeProf = getActiveProfile();
+      if (activeProf) setActiveProfileState(activeProf);
+    }
 
-    // Deep link support for receipt verification (e.g. ?verify=VER-8F2K9M)
+    // Parse URL parameters for payment request links & status verification
     try {
       const params = new URLSearchParams(window.location.search);
+      
+      // 1. Check for Payee handle: ?to=username or ?payTo=username or ?user=username
+      const toParam = params.get('to') || params.get('payTo') || params.get('user');
+      if (toParam) {
+        getPublicProfileByUsername(toParam).then(prof => {
+          if (prof) setPayee(prof);
+        });
+      }
+
+      // 2. Check for pre-set amount: ?am=500 or ?amount=500
+      const amParam = params.get('am') || params.get('amount');
+      if (amParam && !isNaN(parseFloat(amParam))) {
+        setFormData(prev => ({ ...prev, amount: String(parseFloat(amParam)) }));
+        setIsPreSetAmount(true);
+      }
+
+      // 3. Check for pre-set purpose: ?desc=Invoice+104 or ?purpose=Services
+      const descParam = params.get('desc') || params.get('purpose');
+      if (descParam) {
+        setFormData(prev => ({ ...prev, purpose: descParam.trim() }));
+      }
+
+      // 4. Check for status lookup deep link: ?verify=VER-XXXXXX
       const verifyParam = params.get('verify') || params.get('check');
       if (verifyParam) {
         setActiveVerificationId(verifyParam.trim().toUpperCase());
         setCurrentView('status');
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('URL param parse notice:', err);
     }
   }, []);
 
@@ -128,7 +167,11 @@ function App() {
       name: cleanName,
       email: emailRes.clean,
       phone: phoneRes.clean,
-      amount: amountRes.num
+      amount: amountRes.num,
+      payeeUsername: payee.username,
+      payeeId: payee.id,
+      payeeUpi: payee.upiId,
+      payeeDisplayName: payee.displayName
     };
 
     setIsSubmitting(true);
@@ -183,7 +226,7 @@ function App() {
   };
 
   const handleCopyVpa = () => {
-    navigator.clipboard.writeText('euonabhijit@okicici').then(() => {
+    navigator.clipboard.writeText(payee.upiId).then(() => {
       setIsCopiedVpa(true);
       setTimeout(() => setIsCopiedVpa(false), 2000);
     });
@@ -222,16 +265,24 @@ function App() {
   };
 
   const handleAdminLogout = async () => {
-    await logoutAdmin();
+    await logoutMerchantSession();
     setIsAdminLoggedIn(false);
+    setActiveProfileState(null);
     setCurrentView('pay');
+  };
+
+  const handleLoginSuccess = (profile) => {
+    setIsAdminLoggedIn(true);
+    setActiveProfileState(profile);
+    setCurrentView('admin');
   };
 
   const noteContent = createdTransaction 
     ? `${createdTransaction.verificationId} - ${formData.purpose || 'Payment'}`
-    : (formData.purpose || 'Payment to Abhijit');
+    : (formData.purpose || `Payment to ${payee.displayName}`);
 
-  const upiLink = `upi://pay?pa=euonabhijit@okicici&pn=Abhijit%20Kumar&mc=0000&tr=TXN${Date.now()}&am=${formData.amount}&cu=INR&tn=${encodeURIComponent(noteContent)}`;
+  // Dynamic UPI URL pointing directly to the receiver's configured UPI ID and legal display name
+  const upiLink = `upi://pay?pa=${payee.upiId}&pn=${encodeURIComponent(payee.displayName)}&mc=0000&tr=TXN${Date.now()}&am=${formData.amount}&cu=INR&tn=${encodeURIComponent(noteContent)}`;
 
   return (
     <div className="app-root">
@@ -240,6 +291,7 @@ function App() {
         onNavigate={(view) => setCurrentView(view)}
         isAdminLoggedIn={isAdminLoggedIn}
         onAdminLogout={handleAdminLogout}
+        activeProfile={activeProfileState}
       />
 
       {/* Subtle Ambient Lighting */}
@@ -276,6 +328,25 @@ function App() {
               {/* STEP 1: PAYMENT FORM */}
               {paymentStep === 'form' && (
                 <div className="fade-in form-view-container">
+                  
+                  {/* Verified Payee Header Pill */}
+                  <div className="payee-profile-banner">
+                    <div className="payee-avatar">
+                      {(payee.displayName || payee.username || 'M').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="payee-info">
+                      <span className="payee-label">VERIFIED RECEIVER ACCOUNT</span>
+                      <div className="payee-title-line">
+                        <span className="payee-name">{payee.displayName}</span>
+                        <span className="payee-handle mono">@{payee.username}</span>
+                      </div>
+                      {payee.bio && <span className="payee-bio">{payee.bio}</span>}
+                    </div>
+                    <div className="payee-vpa-chip mono">
+                      {payee.upiId}
+                    </div>
+                  </div>
+
                   <div className="card-header-block">
                     <div className="header-meta-pill">
                       <IconShieldCheck size={14} className="text-emerald" />
@@ -317,7 +388,7 @@ function App() {
                           value={formData.amount}
                           onChange={handleChange}
                           required
-                          autoFocus
+                          autoFocus={!isPreSetAmount}
                         />
                       </div>
 
@@ -360,8 +431,8 @@ function App() {
                           type="tel"
                           id="phone"
                           name="phone"
-                          className="form-control"
-                          placeholder="10-digit number"
+                          className="form-control mono"
+                          placeholder="10-digit mobile number"
                           value={formData.phone}
                           onChange={handleChange}
                           maxLength={15}
@@ -370,9 +441,9 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Email */}
+                    {/* Email Field */}
                     <div className="form-group">
-                      <label htmlFor="email" className="field-label">Email ID (for e-receipt) *</label>
+                      <label htmlFor="email" className="field-label">Email ID (For Official Receipt) *</label>
                       <input
                         type="email"
                         id="email"
@@ -388,20 +459,16 @@ function App() {
                     {/* Purpose of Payment */}
                     <div className="form-group">
                       <label htmlFor="purpose" className="field-label">Purpose of Payment *</label>
-                      <select
+                      <input
+                        type="text"
                         id="purpose"
                         name="purpose"
-                        className="form-control custom-select"
+                        className="form-control"
+                        placeholder="Payment purpose or invoice reference"
                         value={formData.purpose}
                         onChange={handleChange}
                         required
-                      >
-                        <option value="Freelance project completion Payment">Freelance project completion Payment</option>
-                        <option value="Education-venture payment">Education-venture payment</option>
-                        <option value="Salary Payment">Salary Payment</option>
-                        <option value="Consultancy & Engineering Advisory">Consultancy & Engineering Advisory</option>
-                        <option value="General Transfer">General Transfer</option>
-                      </select>
+                      />
                     </div>
 
                     {/* Source Selector as Modern Segmented Control */}
@@ -428,7 +495,7 @@ function App() {
 
                     <div className="guarantee-footer">
                       <IconShieldCheck size={15} className="text-emerald" />
-                      <span>Secured with end-to-end 256-bit encryption • Direct ICICI Bank Settlement</span>
+                      <span>Secured with end-to-end 256-bit encryption • Direct Bank Settlement</span>
                     </div>
                   </form>
                 </div>
@@ -446,7 +513,7 @@ function App() {
                       Scan & Pay ₹{Number(formData.amount).toLocaleString('en-IN')}
                     </h2>
                     <p className="sub-title">
-                      Scan the verified UPI QR with any mobile app or use direct intent link
+                      Transferring directly to <strong>{payee.displayName}</strong> ({payee.upiId})
                     </p>
                   </div>
 
@@ -471,7 +538,7 @@ function App() {
                     <div className="vpa-display-pill">
                       <div className="vpa-info">
                         <span className="vpa-label">OFFICIAL RECEIVER VPA</span>
-                        <span className="vpa-address">euonabhijit@okicici</span>
+                        <span className="vpa-address">{payee.upiId}</span>
                       </div>
                       <button 
                         type="button" 
@@ -508,45 +575,37 @@ function App() {
                   {/* UTR Input Section */}
                   <div className="utr-capture-card">
                     <div className="utr-label-row">
-                      <label htmlFor="utr" className="field-label">
-                        Enter 12-Digit Bank Reference (UTR)
+                      <label htmlFor="utr" className="utr-main-label">
+                        Enter 12-Digit Bank UTR / UPI Reference
                       </label>
-                      <span className={`utr-counter ${(formData.utr || '').length === 12 ? 'ready' : ''}`}>
-                        {(formData.utr || '').length} / 12 digits
-                      </span>
+                      <span className="utr-badge-info">Anti-Spoof Protected</span>
                     </div>
+                    <p className="utr-instruction-text">
+                      After completing the payment in your UPI app, locate the 12-digit transaction reference (UTR) in your receipt and enter it below.
+                    </p>
 
                     <div className="utr-input-wrapper">
                       <input
                         type="text"
                         id="utr"
                         name="utr"
-                        className="form-control mono-input utr-field"
+                        className="form-control mono utr-field-control"
                         placeholder="e.g. 410293847561"
                         maxLength={12}
                         value={formData.utr}
                         onChange={handleChange}
+                        autoComplete="off"
                       />
-                      {(formData.utr || '').length === 12 && !utrError && (
-                        <div className="utr-valid-tick">
-                          <IconCheck size={16} className="text-emerald" />
-                        </div>
-                      )}
                     </div>
 
-                    {utrError ? (
-                      <div className="status-alert alert-error fade-in" style={{ marginTop: '0.6rem' }}>
-                        <IconAlertCircle size={16} className="alert-icon-svg" />
-                        <span style={{ fontSize: '0.85rem' }}>{utrError}</span>
+                    {utrError && (
+                      <div className="status-alert alert-error inline-utr-alert fade-in">
+                        <IconAlertCircle size={15} />
+                        <span>{utrError}</span>
                       </div>
-                    ) : (
-                      <p className="utr-help-text">
-                        The 12-digit UTR appears on your bank debited SMS or payment success screen. Providing it initiates instant automated reconciliation.
-                      </p>
                     )}
                   </div>
-                  
-                  {/* Action Buttons */}
+
                   <div className="step-actions-footer">
                     <button 
                       onClick={handleConfirmPaid} 
@@ -605,7 +664,7 @@ function App() {
                     <div className="timeline-point">
                       <div className="point-dot pulse"></div>
                       <div className="point-text">
-                        <strong>Bank Statement Reconciliation:</strong> Receiver will match your 12-digit UTR against the ICICI bank statement.
+                        <strong>Bank Statement Reconciliation:</strong> Receiver ({payee.displayName}) will match your 12-digit UTR against their statement.
                       </div>
                     </div>
                     <div className="timeline-point">
@@ -645,14 +704,14 @@ function App() {
             />
           )}
 
-          {/* VIEW: ADMIN PORTAL */}
+          {/* VIEW: USER / MERCHANT PORTAL */}
           {currentView === 'admin' && (
             <>
               {isAdminLoggedIn ? (
-                <AdminDashboard onLogout={handleAdminLogout} />
+                <UserDashboard onLogout={handleAdminLogout} />
               ) : (
-                <AdminLogin 
-                  onLoginSuccess={() => setIsAdminLoggedIn(true)}
+                <AuthPortal 
+                  onLoginSuccess={handleLoginSuccess}
                   onCancel={() => setCurrentView('pay')}
                 />
               )}

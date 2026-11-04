@@ -8,7 +8,7 @@ import {
   IconArrowRight 
 } from './Icons';
 
-function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
+function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activeProfile }) {
   const [isOpen, setIsOpen] = useState(false);
 
   // Close menu on Escape key
@@ -76,12 +76,12 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
                   onClick={() => handleNavClick('admin')}
                 >
                   <span className="admin-status-dot"></span>
-                  <span>Dashboard</span>
+                  <span>{activeProfile?.displayName ? `${activeProfile.displayName} (Dashboard)` : 'Dashboard'}</span>
                 </button>
                 <button 
                   className="nav-logout-btn"
                   onClick={onAdminLogout}
-                  title="Sign out of Admin session"
+                  title="Sign out of your session"
                 >
                   Sign Out
                 </button>
@@ -92,7 +92,7 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
                 onClick={() => handleNavClick('admin')}
               >
                 <IconLock size={13} />
-                <span>Admin</span>
+                <span>Merchant Portal</span>
               </button>
             )}
           </nav>
@@ -184,7 +184,7 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
 
           <div className="drawer-divider"></div>
 
-          <div className="drawer-label">SECURITY & ACCESS</div>
+          <div className="drawer-label">MERCHANT ACCOUNT</div>
           <ul className="drawer-links">
             <li>
               <button 
@@ -192,7 +192,7 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout }) {
                 onClick={() => handleNavClick('admin')}
               >
                 <IconLock size={18} className="link-icon" />
-                <span>{isAdminLoggedIn ? 'Verification Dashboard' : 'Admin Security Portal'}</span>
+                <span>{isAdminLoggedIn ? 'My Merchant Dashboard' : 'Merchant Portal (Sign In/Up)'}</span>
               </button>
             </li>
 

@@ -33,6 +33,10 @@ export const toClientTx = (row) => {
     status: row.status || 'pending',
     notes: row.notes || '',
     verifiedBy: row.verified_by || null,
+    payeeUsername: row.payee_username || 'abhijit',
+    payeeId: row.payee_id || null,
+    payeeUpi: row.payee_upi || '',
+    payeeDisplayName: row.payee_display_name || '',
     createdAt: row.created_at || new Date().toISOString(),
     verifiedAt: row.verified_at || null
   };
@@ -233,14 +237,23 @@ function parseGVizData(data) {
 // HYBRID DATA OPERATIONS (Supabase Real-Time Database)
 // =========================================================================
 
-// Fetch all transactions from Supabase live database (excluding deleted)
-export const fetchRemoteTransactions = async () => {
+// Fetch all transactions from Supabase live database (optionally scoped to logged-in merchant)
+export const fetchRemoteTransactions = async (scopedUsername = null, scopedUserId = null) => {
   try {
-    const { data: sbData, error } = await supabase
+    let query = supabase
       .from('transactions')
       .select('*')
-      .neq('status', 'deleted')
-      .order('created_at', { ascending: false });
+      .neq('status', 'deleted');
+
+    if (scopedUsername && scopedUserId) {
+      query = query.or(`payee_username.eq.${scopedUsername.toLowerCase()},payee_id.eq.${scopedUserId}`);
+    } else if (scopedUsername) {
+      query = query.eq('payee_username', scopedUsername.toLowerCase());
+    } else if (scopedUserId) {
+      query = query.eq('payee_id', scopedUserId);
+    }
+
+    const { data: sbData, error } = await query.order('created_at', { ascending: false });
 
     if (!error && Array.isArray(sbData)) {
       const clientTxs = sbData.map(toClientTx);
@@ -251,7 +264,10 @@ export const fetchRemoteTransactions = async () => {
     console.warn('Supabase fetch error:', err);
   }
 
-  const localList = getTransactions().filter(t => t.status !== 'deleted');
+  let localList = getTransactions().filter(t => t.status !== 'deleted');
+  if (scopedUsername) {
+    localList = localList.filter(t => !t.payeeUsername || t.payeeUsername.toLowerCase() === scopedUsername.toLowerCase());
+  }
   return { success: false, source: 'local', transactions: localList };
 };
 
@@ -259,6 +275,11 @@ export const fetchRemoteTransactions = async () => {
 export const addTransaction = async (formData) => {
   const localList = getTransactions();
   const verificationId = generateVerificationId();
+
+  const payeeUsername = (formData.payeeUsername || 'abhijit').toLowerCase();
+  const payeeId = formData.payeeId || null;
+  const payeeUpi = formData.payeeUpi || '';
+  const payeeDisplayName = formData.payeeDisplayName || '';
 
   const newTx = {
     verificationId,
@@ -269,6 +290,10 @@ export const addTransaction = async (formData) => {
     source: formData.source || '',
     amount: formData.amount || '0.00',
     utr: formData.utr || '',
+    payeeUsername,
+    payeeId,
+    payeeUpi,
+    payeeDisplayName,
     status: 'pending',
     createdAt: new Date().toISOString(),
     verifiedAt: null,
@@ -283,26 +308,51 @@ export const addTransaction = async (formData) => {
 
   // 3. Insert into Supabase
   try {
+    const insertPayload = {
+      verification_id: verificationId,
+      name: newTx.name,
+      email: newTx.email,
+      phone: newTx.phone,
+      purpose: newTx.purpose,
+      source: newTx.source,
+      amount: parseFloat(newTx.amount) || 0,
+      utr: newTx.utr || null,
+      status: 'pending',
+      notes: '',
+      payee_username: payeeUsername
+    };
+
+    if (payeeId) {
+      insertPayload.payee_id = payeeId;
+    }
+
     const { data, error } = await supabase
       .from('transactions')
-      .insert([
-        {
-          verification_id: verificationId,
-          name: newTx.name,
-          email: newTx.email,
-          phone: newTx.phone,
-          purpose: newTx.purpose,
-          source: newTx.source,
-          amount: parseFloat(newTx.amount) || 0,
-          utr: newTx.utr || null,
-          status: 'pending',
-          notes: ''
-        }
-      ])
+      .insert([insertPayload])
       .select()
       .single();
 
     if (error) {
+      // In case payee_username or payee_id column does not exist yet in Supabase table
+      if (error.message && (error.message.includes('column') || error.code === 'PGRST204')) {
+        const { data: retryData } = await supabase
+          .from('transactions')
+          .insert([{
+            verification_id: verificationId,
+            name: newTx.name,
+            email: newTx.email,
+            phone: newTx.phone,
+            purpose: newTx.purpose,
+            source: newTx.source,
+            amount: parseFloat(newTx.amount) || 0,
+            utr: newTx.utr || null,
+            status: 'pending',
+            notes: ''
+          }])
+          .select()
+          .single();
+        if (retryData) return toClientTx(retryData);
+      }
       console.error('Error inserting transaction into Supabase:', error);
     } else if (data) {
       return toClientTx(data);
