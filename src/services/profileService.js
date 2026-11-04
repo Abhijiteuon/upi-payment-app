@@ -1,5 +1,5 @@
-import { supabase } from './supabaseClient';
-import { validateUPI, validateUsername, validateEmail } from './security';
+import { supabase } from './supabaseClient.js';
+import { validateUPI, validateUsername, validateEmail } from './security.js';
 
 const ACTIVE_PROFILE_KEY = 'cloak_active_profile';
 const KNOWN_PROFILES_KEY = 'cloak_known_profiles';
@@ -15,6 +15,9 @@ export const DEFAULT_MERCHANT = {
 // Seed known profiles with default merchant
 const getKnownProfiles = () => {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return { abhijit: DEFAULT_MERCHANT };
+    }
     const raw = localStorage.getItem(KNOWN_PROFILES_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     if (!parsed['abhijit']) {
@@ -29,6 +32,7 @@ const getKnownProfiles = () => {
 const saveKnownProfile = (profile) => {
   if (!profile || !profile.username) return;
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
     const known = getKnownProfiles();
     known[profile.username.toLowerCase()] = {
       id: profile.id,

@@ -29,10 +29,11 @@ import {
   IconLink,
   IconQrCode,
   IconEdit,
-  IconSmartPhone
+  IconSmartPhone,
+  IconExternalLink
 } from './Icons';
 
-function UserDashboard({ onLogout }) {
+function UserDashboard({ onLogout, onProfileUpdate, onPreviewPayment }) {
   const [profile, setProfile] = useState(getActiveProfile() || {
     username: 'abhijit',
     displayName: 'Abhijit Kumar',
@@ -145,6 +146,7 @@ function UserDashboard({ onLogout }) {
       setProfile(res.profile);
       setShowProfileModal(false);
       showToast('Profile and receiving UPI ID updated successfully!');
+      if (onProfileUpdate) onProfileUpdate(res.profile);
     } else {
       setProfileModalError(res.error || 'Failed to update profile.');
     }
@@ -448,6 +450,16 @@ function UserDashboard({ onLogout }) {
             >
               <IconQrCode size={14} />
               <span>Show QR</span>
+            </button>
+
+            <button 
+              type="button" 
+              className="share-action-btn preview"
+              onClick={() => onPreviewPayment && onPreviewPayment(profile)}
+              title="Test & preview what your payers will see"
+            >
+              <IconExternalLink size={14} />
+              <span>Preview Link</span>
             </button>
           </div>
         </div>

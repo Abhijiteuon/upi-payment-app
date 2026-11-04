@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { 
   maskPhone, 
   maskEmail, 
+  maskVPA,
   generateReceiptFingerprint 
 } from '../services/security';
 import { 
@@ -43,7 +44,7 @@ function PaymentReceipt({ transaction, onBack, isAdminView = false }) {
 
     const text = `
 === OFFICIAL PAYMENT RECEIPT ===
-Payee: ${payeeName} (${payeeVpa})
+Payee: ${payeeName} (${isMasked ? maskVPA(payeeVpa) : payeeVpa})
 Verification ID: ${transaction.verificationId}
 Status: VERIFIED & SETTLED
 Amount: ₹${Number(transaction.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -167,7 +168,9 @@ Verify Online: ${verificationUrl}
 
           <div className="receipt-detail-cell">
             <span className="cell-label">RECEIVER VPA</span>
-            <span className="cell-value mono">{transaction.payeeUpi || 'euonabhijit@okicici'}</span>
+            <span className="cell-value mono">
+              {isMasked ? maskVPA(transaction.payeeUpi || 'euonabhijit@okicici') : (transaction.payeeUpi || 'euonabhijit@okicici')}
+            </span>
           </div>
 
           <div className="receipt-detail-cell">

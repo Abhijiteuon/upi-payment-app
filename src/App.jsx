@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import Navbar from './components/Navbar';
 import StatusCheck from './components/StatusCheck';
@@ -14,6 +14,7 @@ import {
   getPublicProfileByUsername, 
   getActiveProfile, 
   logoutMerchantSession,
+  buildPaymentRequestUrl,
   DEFAULT_MERCHANT 
 } from './services/profileService';
 import { 
@@ -21,7 +22,8 @@ import {
   validatePhone, 
   validateEmail, 
   validateAmount, 
-  sanitizeText 
+  sanitizeText,
+  maskVPA 
 } from './services/security';
 import { 
   IconShieldCheck, 
@@ -31,7 +33,8 @@ import {
   IconArrowLeft, 
   IconAlertCircle, 
   IconClock, 
-  IconSmartPhone 
+  IconSmartPhone,
+  IconLock
 } from './components/Icons';
 import './index.css';
 
@@ -48,14 +51,17 @@ function App() {
   const [payee, setPayee] = useState(DEFAULT_MERCHANT);
   const [isPreSetAmount, setIsPreSetAmount] = useState(false);
 
+  // Privacy: Ghost Mode for Payer (Zero-PII Checkout)
+  const [isGhostMode, setIsGhostMode] = useState(true);
+
   // Payment form state
   const [formData, setFormData] = useState({
-    name: '',
+    name: 'Anonymous Payer',
     purpose: 'Freelance project completion Payment',
     source: 'Individual',
     amount: '',
-    phone: '',
-    email: '',
+    phone: '9800000000',
+    email: 'ghost@cloak.internal',
     utr: ''
   });
 
@@ -66,9 +72,38 @@ function App() {
   // Payment step: 'form' | 'qr' | 'confirmed'
   const [paymentStep, setPaymentStep] = useState('form');
   const [createdTransaction, setCreatedTransaction] = useState(null);
-  const [isCopiedVpa, setIsCopiedVpa] = useState(false);
+  const [isCopiedLink, setIsCopiedLink] = useState(false);
   const [isCopiedId, setIsCopiedId] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync Payee helper: Resolves ?to=... from URL, or active logged-in profile, or default fallback
+  const syncPayee = useCallback(async () => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const toParam = params.get('to') || params.get('payTo') || params.get('user');
+
+      if (toParam) {
+        const prof = await getPublicProfileByUsername(toParam);
+        if (prof) {
+          setPayee(prof);
+          return;
+        }
+      }
+
+      // If no ?to=... is in URL, check if a merchant is logged in
+      const activeProf = getActiveProfile();
+      if (activeProf && activeProf.username) {
+        setPayee(activeProf);
+        setActiveProfileState(activeProf);
+        return;
+      }
+
+      // Default platform fallback
+      setPayee(DEFAULT_MERCHANT);
+    } catch (err) {
+      console.warn('Sync payee notice:', err);
+    }
+  }, []);
 
   // Initialize admin session check & URL parameter detection
   useEffect(() => {
@@ -80,32 +115,23 @@ function App() {
       if (activeProf) setActiveProfileState(activeProf);
     }
 
-    // Parse URL parameters for payment request links & status verification
+    // Resolve Payee from URL or logged-in user
+    syncPayee();
+
+    // Check pre-set amount and purpose from URL
     try {
       const params = new URLSearchParams(window.location.search);
-      
-      // 1. Check for Payee handle: ?to=username or ?payTo=username or ?user=username
-      const toParam = params.get('to') || params.get('payTo') || params.get('user');
-      if (toParam) {
-        getPublicProfileByUsername(toParam).then(prof => {
-          if (prof) setPayee(prof);
-        });
-      }
-
-      // 2. Check for pre-set amount: ?am=500 or ?amount=500
       const amParam = params.get('am') || params.get('amount');
       if (amParam && !isNaN(parseFloat(amParam))) {
         setFormData(prev => ({ ...prev, amount: String(parseFloat(amParam)) }));
         setIsPreSetAmount(true);
       }
 
-      // 3. Check for pre-set purpose: ?desc=Invoice+104 or ?purpose=Services
       const descParam = params.get('desc') || params.get('purpose');
       if (descParam) {
         setFormData(prev => ({ ...prev, purpose: descParam.trim() }));
       }
 
-      // 4. Check for status lookup deep link: ?verify=VER-XXXXXX
       const verifyParam = params.get('verify') || params.get('check');
       if (verifyParam) {
         setActiveVerificationId(verifyParam.trim().toUpperCase());
@@ -114,7 +140,7 @@ function App() {
     } catch (err) {
       console.warn('URL param parse notice:', err);
     }
-  }, []);
+  }, [syncPayee]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -128,28 +154,10 @@ function App() {
     if (formError) setFormError('');
   };
 
-  // Step 1 -> Step 2: Proceed to Pay with Full Input Validation
+  // Step 1 -> Step 2: Proceed to Pay with Privacy Hardening
   const handleProceedToPay = async (e) => {
     e.preventDefault();
     setFormError('');
-
-    const cleanName = sanitizeText(formData.name, 80);
-    if (!cleanName || cleanName.length < 2) {
-      setFormError('Please enter a valid full name (minimum 2 characters).');
-      return;
-    }
-
-    const emailRes = validateEmail(formData.email);
-    if (!emailRes.valid) {
-      setFormError(emailRes.error);
-      return;
-    }
-
-    const phoneRes = validatePhone(formData.phone);
-    if (!phoneRes.valid) {
-      setFormError(phoneRes.error);
-      return;
-    }
 
     const amountRes = validateAmount(formData.amount);
     if (!amountRes.valid) {
@@ -162,11 +170,38 @@ function App() {
       return;
     }
 
+    let finalName = 'Anonymous Payer';
+    let finalEmail = 'ghost@cloak.internal';
+    let finalPhone = '9800000000';
+
+    if (!isGhostMode) {
+      const cleanName = sanitizeText(formData.name, 80);
+      if (!cleanName || cleanName.length < 2) {
+        setFormError('Please enter a valid full name (minimum 2 characters).');
+        return;
+      }
+      finalName = cleanName;
+
+      const emailRes = validateEmail(formData.email);
+      if (!emailRes.valid) {
+        setFormError(emailRes.error);
+        return;
+      }
+      finalEmail = emailRes.clean;
+
+      const phoneRes = validatePhone(formData.phone);
+      if (!phoneRes.valid) {
+        setFormError(phoneRes.error);
+        return;
+      }
+      finalPhone = phoneRes.clean;
+    }
+
     const sanitizedData = {
       ...formData,
-      name: cleanName,
-      email: emailRes.clean,
-      phone: phoneRes.clean,
+      name: finalName,
+      email: finalEmail,
+      phone: finalPhone,
       amount: amountRes.num,
       payeeUsername: payee.username,
       payeeId: payee.id,
@@ -225,10 +260,11 @@ function App() {
     setPaymentStep('confirmed');
   };
 
-  const handleCopyVpa = () => {
-    navigator.clipboard.writeText(payee.upiId).then(() => {
-      setIsCopiedVpa(true);
-      setTimeout(() => setIsCopiedVpa(false), 2000);
+  const handleCopyShareLink = () => {
+    const link = buildPaymentRequestUrl(payee.username, formData.amount, formData.purpose);
+    navigator.clipboard.writeText(link).then(() => {
+      setIsCopiedLink(true);
+      setTimeout(() => setIsCopiedLink(false), 2000);
     });
   };
 
@@ -242,12 +278,12 @@ function App() {
 
   const handleResetToPay = () => {
     setFormData({
-      name: '',
+      name: isGhostMode ? 'Anonymous Payer' : '',
       purpose: 'Freelance project completion Payment',
       source: 'Individual',
       amount: '',
-      phone: '',
-      email: '',
+      phone: isGhostMode ? '9800000000' : '',
+      email: isGhostMode ? 'ghost@cloak.internal' : '',
       utr: ''
     });
     setFormError('');
@@ -268,27 +304,54 @@ function App() {
     await logoutMerchantSession();
     setIsAdminLoggedIn(false);
     setActiveProfileState(null);
+    setPayee(DEFAULT_MERCHANT);
     setCurrentView('pay');
   };
 
   const handleLoginSuccess = (profile) => {
     setIsAdminLoggedIn(true);
     setActiveProfileState(profile);
+    setPayee(profile);
     setCurrentView('admin');
+  };
+
+  // Called when merchant updates their profile in dashboard
+  const handleProfileUpdate = (updatedProfile) => {
+    setActiveProfileState(updatedProfile);
+    setPayee(updatedProfile);
+  };
+
+  // Called when merchant clicks "Preview As Payer" in dashboard
+  const handlePreviewPayment = (targetProfile) => {
+    setPayee(targetProfile);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('to', targetProfile.username);
+      window.history.pushState({}, '', url.toString());
+    } catch {
+      // ignore
+    }
+    setPaymentStep('form');
+    setCurrentView('pay');
   };
 
   const noteContent = createdTransaction 
     ? `${createdTransaction.verificationId} - ${formData.purpose || 'Payment'}`
-    : (formData.purpose || `Payment to ${payee.displayName}`);
+    : (formData.purpose || `Payment to ${payee.displayName || 'Merchant'}`);
 
-  // Dynamic UPI URL pointing directly to the receiver's configured UPI ID and legal display name
-  const upiLink = `upi://pay?pa=${payee.upiId}&pn=${encodeURIComponent(payee.displayName)}&mc=0000&tr=TXN${Date.now()}&am=${formData.amount}&cu=INR&tn=${encodeURIComponent(noteContent)}`;
+  // Dynamic UPI URL pointing to receiver's configured UPI ID, with Payee Name set to alias
+  const upiLink = `upi://pay?pa=${payee.upiId}&pn=${encodeURIComponent(payee.displayName || 'CLOAK MERCHANT')}&mc=0000&tr=TXN${Date.now()}&am=${formData.amount}&cu=INR&tn=${encodeURIComponent(noteContent)}`;
 
   return (
     <div className="app-root">
       <Navbar 
         currentView={currentView}
-        onNavigate={(view) => setCurrentView(view)}
+        onNavigate={(view) => {
+          if (view === 'pay') {
+            syncPayee();
+          }
+          setCurrentView(view);
+        }}
         isAdminLoggedIn={isAdminLoggedIn}
         onAdminLogout={handleAdminLogout}
         activeProfile={activeProfileState}
@@ -329,32 +392,79 @@ function App() {
               {paymentStep === 'form' && (
                 <div className="fade-in form-view-container">
                   
-                  {/* Verified Payee Header Pill */}
+                  {/* Cloaked Receiver Header Pill */}
                   <div className="payee-profile-banner">
                     <div className="payee-avatar">
-                      {(payee.displayName || payee.username || 'M').charAt(0).toUpperCase()}
+                      <IconShieldCheck size={22} className="text-emerald" />
                     </div>
                     <div className="payee-info">
-                      <span className="payee-label">VERIFIED RECEIVER ACCOUNT</span>
+                      <div className="payee-meta-line">
+                        <span className="payee-label">VERIFIED CLOAK RECIPIENT</span>
+                        <span className="cloaked-pill">
+                          <IconLock size={10} />
+                          CREDENTIALS SHIELDED
+                        </span>
+                      </div>
                       <div className="payee-title-line">
-                        <span className="payee-name">{payee.displayName}</span>
+                        <span className="payee-name">{payee.displayName || 'Merchant'}</span>
                         <span className="payee-handle mono">@{payee.username}</span>
                       </div>
-                      {payee.bio && <span className="payee-bio">{payee.bio}</span>}
+                      <span className="payee-privacy-note">
+                        Direct peer-to-bank settlement · Personal bank details & VPA masked
+                      </span>
                     </div>
-                    <div className="payee-vpa-chip mono">
-                      {payee.upiId}
+                    <div className="payee-vpa-chip mono shielded" title="Actual receiving UPI ID is cloaked for privacy">
+                      {maskVPA(payee.upiId)}
                     </div>
                   </div>
 
                   <div className="card-header-block">
                     <div className="header-meta-pill">
                       <IconShieldCheck size={14} className="text-emerald" />
-                      <span>CLOAK PROTOCOL · DIRECT SETTLEMENT</span>
+                      <span>CLOAK PROTOCOL · ZERO-LEAK SETTLEMENT</span>
                     </div>
                     <h1 className="main-title">
                       Initiate Payment
                     </h1>
+                  </div>
+
+                  {/* Payer Privacy: Ghost Mode Toggle */}
+                  <div className="ghost-mode-card">
+                    <div className="ghost-info-col">
+                      <div className="ghost-title-row">
+                        <IconShieldCheck size={16} className="text-emerald" />
+                        <span className="ghost-title">Ghost Mode (Zero-PII Checkout)</span>
+                      </div>
+                      <span className="ghost-desc">
+                        Pay completely anonymously. Your phone number and email are not required.
+                      </span>
+                    </div>
+                    <label className="ghost-toggle-switch" title="Toggle Anonymous Ghost Mode">
+                      <input 
+                        type="checkbox" 
+                        checked={isGhostMode} 
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setIsGhostMode(val);
+                          if (val) {
+                            setFormData(prev => ({
+                              ...prev,
+                              name: 'Anonymous Payer',
+                              phone: '9800000000',
+                              email: 'ghost@cloak.internal'
+                            }));
+                          } else {
+                            setFormData(prev => ({
+                              ...prev,
+                              name: '',
+                              phone: '',
+                              email: ''
+                            }));
+                          }
+                        }} 
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
                   </div>
 
                   {formError && (
@@ -371,7 +481,7 @@ function App() {
                     {/* Amount Field with Quick Select Chips */}
                     <div className="form-group amount-group">
                       <div className="amount-label-row">
-                        <label htmlFor="amount" className="field-label">Transfer Amount (INR)</label>
+                        <label htmlFor="amount" className="field-label">Transfer Amount (INR) *</label>
                         <span className="amount-currency-tag">₹ INR</span>
                       </div>
                       <div className="amount-input-box">
@@ -408,54 +518,6 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Full Name & Phone */}
-                    <div className="form-row-2col">
-                      <div className="form-group">
-                        <label htmlFor="name" className="field-label">Payer Full Name *</label>
-                        <input
-                          type="text"
-                          id="name"
-                          name="name"
-                          className="form-control"
-                          placeholder="Enter your legal name"
-                          value={formData.name}
-                          onChange={handleChange}
-                          maxLength={80}
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label htmlFor="phone" className="field-label">Mobile Number *</label>
-                        <input
-                          type="tel"
-                          id="phone"
-                          name="phone"
-                          className="form-control mono"
-                          placeholder="10-digit mobile number"
-                          value={formData.phone}
-                          onChange={handleChange}
-                          maxLength={15}
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    {/* Email Field */}
-                    <div className="form-group">
-                      <label htmlFor="email" className="field-label">Email ID (For Official Receipt) *</label>
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        className="form-control"
-                        placeholder="name@company.com"
-                        value={formData.email}
-                        onChange={handleChange}
-                        required
-                      />
-                    </div>
-
                     {/* Purpose of Payment */}
                     <div className="form-group">
                       <label htmlFor="purpose" className="field-label">Purpose of Payment *</label>
@@ -470,6 +532,57 @@ function App() {
                         required
                       />
                     </div>
+
+                    {/* Non-Ghost Payer Contact Fields (Only displayed if Ghost Mode is toggled off) */}
+                    {!isGhostMode && (
+                      <div className="payer-contact-fields fade-in">
+                        <div className="form-row-2col">
+                          <div className="form-group">
+                            <label htmlFor="name" className="field-label">Payer Full Name *</label>
+                            <input
+                              type="text"
+                              id="name"
+                              name="name"
+                              className="form-control"
+                              placeholder="Enter your name"
+                              value={formData.name}
+                              onChange={handleChange}
+                              maxLength={80}
+                              required
+                            />
+                          </div>
+
+                          <div className="form-group">
+                            <label htmlFor="phone" className="field-label">Mobile Number *</label>
+                            <input
+                              type="tel"
+                              id="phone"
+                              name="phone"
+                              className="form-control mono"
+                              placeholder="10-digit mobile number"
+                              value={formData.phone}
+                              onChange={handleChange}
+                              maxLength={15}
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div className="form-group">
+                          <label htmlFor="email" className="field-label">Email Address (For Tax Receipt) *</label>
+                          <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            className="form-control"
+                            placeholder="name@company.com"
+                            value={formData.email}
+                            onChange={handleChange}
+                            required
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {/* Source Selector as Modern Segmented Control */}
                     <div className="form-group">
@@ -489,13 +602,13 @@ function App() {
                     </div>
 
                     <button type="submit" className="primary-action-btn" disabled={isSubmitting}>
-                      <span>{isSubmitting ? 'Securing Transaction...' : `Generate UPI QR · ₹${formData.amount ? Number(formData.amount).toLocaleString('en-IN') : '0.00'}`}</span>
+                      <span>{isSubmitting ? 'Securing Session...' : `Generate UPI QR · ₹${formData.amount ? Number(formData.amount).toLocaleString('en-IN') : '0.00'}`}</span>
                       <IconArrowRight size={18} />
                     </button>
 
                     <div className="guarantee-footer">
                       <IconShieldCheck size={15} className="text-emerald" />
-                      <span>Secured with end-to-end 256-bit encryption • Direct Bank Settlement</span>
+                      <span>Zero-Knowledge Relay • Bilateral Privacy Protected</span>
                     </div>
                   </form>
                 </div>
@@ -513,7 +626,7 @@ function App() {
                       Scan & Pay ₹{Number(formData.amount).toLocaleString('en-IN')}
                     </h2>
                     <p className="sub-title">
-                      Transferring directly to <strong>{payee.displayName}</strong> ({payee.upiId})
+                      Transferring via CLOAK Zero-Knowledge Switch to <strong>{payee.displayName || 'Merchant'}</strong>
                     </p>
                   </div>
 
@@ -534,20 +647,23 @@ function App() {
                       />
                     </div>
 
-                    {/* VPA Copy Pill */}
-                    <div className="vpa-display-pill">
+                    {/* Cloaked VPA Endpoint Display (Raw UPI ID is masked from payer) */}
+                    <div className="vpa-display-pill shielded-pill">
                       <div className="vpa-info">
-                        <span className="vpa-label">OFFICIAL RECEIVER VPA</span>
-                        <span className="vpa-address">{payee.upiId}</span>
+                        <div className="vpa-label-row">
+                          <IconShieldCheck size={14} className="text-emerald" />
+                          <span className="vpa-label">CLOAK PROTECTED ENDPOINT</span>
+                        </div>
+                        <span className="vpa-address mono">{maskVPA(payee.upiId)}</span>
                       </div>
                       <button 
                         type="button" 
-                        onClick={handleCopyVpa} 
+                        onClick={handleCopyShareLink} 
                         className="copy-pill-btn"
-                        title="Copy UPI ID"
+                        title="Copy Shielded Payment Link"
                       >
-                        {isCopiedVpa ? <IconCheck size={14} className="text-emerald" /> : <IconCopy size={14} />}
-                        <span>{isCopiedVpa ? 'Copied' : 'Copy'}</span>
+                        {isCopiedLink ? <IconCheck size={14} className="text-emerald" /> : <IconCopy size={14} />}
+                        <span>{isCopiedLink ? 'Copied' : 'Copy Pay Link'}</span>
                       </button>
                     </div>
 
@@ -664,7 +780,7 @@ function App() {
                     <div className="timeline-point">
                       <div className="point-dot pulse"></div>
                       <div className="point-text">
-                        <strong>Bank Statement Reconciliation:</strong> Receiver ({payee.displayName}) will match your 12-digit UTR against their statement.
+                        <strong>Bank Statement Reconciliation:</strong> Receiver will match your 12-digit UTR against their statement.
                       </div>
                     </div>
                     <div className="timeline-point">
@@ -708,7 +824,11 @@ function App() {
           {currentView === 'admin' && (
             <>
               {isAdminLoggedIn ? (
-                <UserDashboard onLogout={handleAdminLogout} />
+                <UserDashboard 
+                  onLogout={handleAdminLogout} 
+                  onProfileUpdate={handleProfileUpdate}
+                  onPreviewPayment={handlePreviewPayment}
+                />
               ) : (
                 <AuthPortal 
                   onLoginSuccess={handleLoginSuccess}

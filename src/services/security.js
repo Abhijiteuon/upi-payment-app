@@ -161,6 +161,20 @@ export const sanitizeText = (text, maxLength = 100) => {
 // =========================================================================
 
 /**
+ * Masks UPI ID / VPA for privacy protection (e.g. "eu••••••@oksbi")
+ */
+export const maskVPA = (vpa) => {
+  if (!vpa || typeof vpa !== 'string' || !vpa.includes('@')) return '••••••@shielded';
+  const [handle, bank] = vpa.split('@');
+  if (handle.length <= 3) {
+    return `${handle[0]}••••@${bank}`;
+  }
+  const start = handle.slice(0, 2);
+  const end = handle.slice(-1);
+  return `${start}••••••${end}@${bank}`;
+};
+
+/**
  * Masks phone number for public display (e.g., "+91 98••••1234")
  */
 export const maskPhone = (phone) => {
