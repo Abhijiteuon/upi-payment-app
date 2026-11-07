@@ -5,34 +5,30 @@ const ACTIVE_PROFILE_KEY = 'cloak_active_profile';
 const KNOWN_PROFILES_KEY = 'cloak_known_profiles';
 
 export const DEFAULT_MERCHANT = {
-  id: 'master-001',
-  username: 'abhijit',
-  displayName: 'Abhijit Kumar',
-  upiId: 'euonabhijit@okicici',
-  bio: 'Lead Architect & Independent Consultant'
+  id: '',
+  username: '',
+  displayName: '',
+  upiId: '',
+  bio: ''
 };
 
-// Seed known profiles with default merchant
+// Seed known profiles with session storage
 const getKnownProfiles = () => {
   try {
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return { abhijit: DEFAULT_MERCHANT };
+    if (typeof window === 'undefined' || !window.sessionStorage) {
+      return {};
     }
-    const raw = localStorage.getItem(KNOWN_PROFILES_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    if (!parsed['abhijit']) {
-      parsed['abhijit'] = DEFAULT_MERCHANT;
-    }
-    return parsed;
+    const raw = sessionStorage.getItem(KNOWN_PROFILES_KEY);
+    return raw ? JSON.parse(raw) : {};
   } catch {
-    return { abhijit: DEFAULT_MERCHANT };
+    return {};
   }
 };
 
 const saveKnownProfile = (profile) => {
   if (!profile || !profile.username) return;
   try {
-    if (typeof window === 'undefined' || !window.localStorage) return;
+    if (typeof window === 'undefined' || !window.sessionStorage) return;
     const known = getKnownProfiles();
     known[profile.username.toLowerCase()] = {
       id: profile.id,
@@ -41,7 +37,7 @@ const saveKnownProfile = (profile) => {
       upiId: profile.upiId || profile.upi_id,
       bio: profile.bio || ''
     };
-    localStorage.setItem(KNOWN_PROFILES_KEY, JSON.stringify(known));
+    sessionStorage.setItem(KNOWN_PROFILES_KEY, JSON.stringify(known));
   } catch (err) {
     console.warn('Failed to cache known profile locally:', err);
   }
@@ -280,15 +276,10 @@ export const updateMerchantProfile = async (updates) => {
  * Public lookup: Fetch a merchant's public payment profile by username (used by Payers)
  */
 export const getPublicProfileByUsername = async (rawUsername) => {
-  if (!rawUsername) return DEFAULT_MERCHANT;
+  if (!rawUsername) return null;
   const username = rawUsername.trim().toLowerCase();
 
-  // 1. Quick check for default merchant
-  if (username === 'abhijit' || username === 'euona' || username === 'default') {
-    return DEFAULT_MERCHANT;
-  }
-
-  // 2. Try Supabase profiles table
+  // 1. Try Supabase profiles table
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -311,18 +302,24 @@ export const getPublicProfileByUsername = async (rawUsername) => {
     console.warn('Public profile lookup notice:', err);
   }
 
-  // 3. Fallback to local known profiles cache
+  // 2. Fallback to session known profiles cache
   const known = getKnownProfiles();
   if (known[username]) {
     return known[username];
   }
 
-  // If username not found, fallback to default merchant
-  return {
-    ...DEFAULT_MERCHANT,
-    customQueryNotFound: true,
-    queriedUsername: username
-  };
+  // 3. Fallback for Abhijit links if requested explicitly
+  if (username === 'abhijit' || username === 'euona') {
+    return {
+      id: 'master-001',
+      username: 'abhijit',
+      displayName: 'Abhijit Kumar',
+      upiId: 'euonabhijit@okicici',
+      bio: 'Lead Architect & Independent Consultant'
+    };
+  }
+
+  return null;
 };
 
 /**

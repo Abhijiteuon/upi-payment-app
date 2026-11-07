@@ -34,10 +34,10 @@ import {
 } from './Icons';
 
 function UserDashboard({ onLogout, onProfileUpdate, onPreviewPayment }) {
-  const [profile, setProfile] = useState(getActiveProfile() || {
-    username: 'abhijit',
-    displayName: 'Abhijit Kumar',
-    upiId: 'euonabhijit@okicici',
+  const [profile, setProfile] = useState(() => getActiveProfile() || {
+    username: '',
+    displayName: 'Merchant',
+    upiId: '',
     bio: ''
   });
 
@@ -88,7 +88,12 @@ function UserDashboard({ onLogout, onProfileUpdate, onPreviewPayment }) {
 
   const loadData = async (showToastMsg = false) => {
     setIsLoading(true);
-    const activeProf = getActiveProfile() || profile;
+    const activeProf = getActiveProfile();
+    if (!activeProf || !activeProf.username) {
+      if (onLogout) onLogout();
+      setIsLoading(false);
+      return;
+    }
     setProfile(activeProf);
 
     const result = await fetchRemoteTransactions(activeProf.username, activeProf.id);

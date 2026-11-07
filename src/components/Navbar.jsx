@@ -32,7 +32,18 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
       <header className="navbar">
         <div className="nav-container">
           {/* Brand Logo */}
-          <div className="nav-logo" onClick={() => handleNavClick('pay')} title="UPI Pay">
+          <div 
+            className="nav-logo" 
+            onClick={() => {
+              if (isAdminLoggedIn) {
+                handleNavClick('admin');
+              } else {
+                const hasTo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('to');
+                handleNavClick(hasTo ? 'pay' : 'admin');
+              }
+            }} 
+            title="UPI Pay"
+          >
             <div className="nav-brand-icon-box">
               <IconShieldCheck size={18} className="text-emerald" />
             </div>
@@ -46,7 +57,14 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
           <nav className="desktop-nav-links">
             <button 
               className={`desktop-nav-btn ${currentView === 'pay' ? 'active' : ''}`}
-              onClick={() => handleNavClick('pay')}
+              onClick={() => {
+                const hasTo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('to');
+                if (!isAdminLoggedIn && !hasTo) {
+                  handleNavClick('admin');
+                } else {
+                  handleNavClick('pay');
+                }
+              }}
             >
               <IconCreditCard size={15} />
               <span>Make Payment</span>
@@ -232,7 +250,14 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
         <button 
           type="button" 
           className={`bottom-nav-item ${currentView === 'pay' ? 'active' : ''}`}
-          onClick={() => handleNavClick('pay')}
+          onClick={() => {
+            const hasTo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('to');
+            if (!isAdminLoggedIn && !hasTo) {
+              handleNavClick('admin');
+            } else {
+              handleNavClick('pay');
+            }
+          }}
         >
           <div className="bottom-nav-icon">
             <IconCreditCard size={20} />
@@ -260,7 +285,7 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
             <IconUser size={20} />
             {isAdminLoggedIn && <span className="bottom-nav-dot"></span>}
           </div>
-          <span className="bottom-nav-label">{isAdminLoggedIn ? 'Dashboard' : 'Account'}</span>
+          <span className="bottom-nav-label">{isAdminLoggedIn ? 'Dashboard' : 'Sign In'}</span>
         </button>
       </nav>
     </>

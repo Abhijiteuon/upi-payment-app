@@ -303,7 +303,7 @@ function AuthPortal({ onLoginSuccess, onCancel }) {
       {onCancel && (
         <div className="admin-cancel-container">
           <button type="button" onClick={onCancel} className="ghost-back-btn cancel-btn">
-            ← Return to Payment Screen
+            Track Payment Status →
           </button>
         </div>
       )}
