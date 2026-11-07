@@ -20,7 +20,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
     setErrorMsg('');
     const id = (idToSearch || queryId).trim();
     if (!id) {
-      setErrorMsg('Please enter a valid Payment Verification ID.');
+      setErrorMsg('Please enter a Reference or Verification ID.');
       setTransaction(null);
       setSearched(true);
       return;
@@ -35,11 +35,11 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
         setTransaction(result);
       } else {
         setTransaction(null);
-        setErrorMsg(`No payment record located for Verification ID: "${id}". Please confirm the ID syntax (e.g. VER-XXXXXX).`);
+        setErrorMsg(`No payment record found for ID: "${id}". Please check the code and try again.`);
       }
     } catch (err) {
       console.error('Error looking up transaction', err);
-      setErrorMsg('Unable to query payment status. Please verify your connection.');
+      setErrorMsg('Unable to check payment status right now. Please check your connection.');
     } finally {
       setIsSearching(false);
     }
@@ -93,11 +93,11 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
       <div className="card-header-block text-center">
         <div className="header-meta-pill">
           <IconSearch size={14} className="text-sky" />
-          <span>REAL-TIME AUDIT LOOKUP</span>
+          <span>PAYMENT TRACKER</span>
         </div>
         <h1 className="main-title">Track Payment Status</h1>
         <p className="sub-title">
-          Query the live settlement status or retrieve an official verified payment receipt
+          Enter your Reference ID to check payment status and access your verified receipt
         </p>
       </div>
 
@@ -108,7 +108,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
             type="text"
             id="verify-id"
             className="search-input-field mono"
-            placeholder="Enter Verification ID (e.g. VER-8X29KP)"
+            placeholder="Enter Reference ID (e.g. VER-8X29KP)"
             value={queryId}
             onChange={(e) => setQueryId(e.target.value.toUpperCase())}
             required
@@ -128,7 +128,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
             </button>
           )}
           <button type="submit" className="search-submit-btn" disabled={isSearching}>
-            {isSearching ? 'Searching...' : 'Check Status'}
+            {isSearching ? 'Searching...' : 'Track'}
           </button>
         </div>
       </form>
@@ -137,7 +137,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
       {isSearching && (
         <div className="status-loading-panel fade-in">
           <div className="spinner-ring"></div>
-          <p>Querying verified ledger and Supabase database...</p>
+          <p>Looking up your payment record...</p>
         </div>
       )}
 
@@ -177,7 +177,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
                 <div className="pending-header-info">
                   <div className="pending-meta-tag">
                     <span className="pulsing-amber-dot"></span>
-                    <span>CREDIT RECONCILIATION IN PROGRESS</span>
+                    <span>VERIFICATION IN PROGRESS</span>
                   </div>
                   <h3>Payment Under Review</h3>
                 </div>
@@ -185,17 +185,17 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
 
               <div className="pending-notice-box">
                 <p>
-                  Your transaction has been submitted. The receiver (Abhijit) cross-checks all credits against bank statements before generating the final tax receipt.
+                  Your payment details have been recorded! The recipient is verifying the credit in their bank account.
                 </p>
                 <div className="live-socket-hint">
                   <IconShieldCheck size={14} className="text-sky" />
-                  <span><strong>Live Auto-Unlock:</strong> This page will automatically update and display your receipt the moment credit is approved. No refresh needed.</span>
+                  <span><strong>Live Auto-Update:</strong> Your receipt will unlock right here automatically as soon as verified.</span>
                 </div>
               </div>
 
               <div className="pending-summary-grid">
                 <div className="summary-cell">
-                  <span className="summary-label">VERIFICATION ID</span>
+                  <span className="summary-label">REFERENCE ID</span>
                   <span className="summary-val mono font-semibold">{transaction.verificationId}</span>
                 </div>
 
@@ -205,13 +205,13 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
                 </div>
 
                 <div className="summary-cell">
-                  <span className="summary-label">AMOUNT DUE</span>
-                  <span className="summary-val font-semibold text-sky">₹{Number(transaction.amount).toLocaleString('en-IN')}</span>
+                  <span className="summary-label">AMOUNT</span>
+                  <span className="summary-val font-semibold text-emerald">₹{Number(transaction.amount).toLocaleString('en-IN')}</span>
                 </div>
 
                 <div className="summary-cell">
-                  <span className="summary-label">PURPOSE</span>
-                  <span className="summary-val">{transaction.purpose}</span>
+                  <span className="summary-label">NOTE / PURPOSE</span>
+                  <span className="summary-val">{transaction.purpose || 'Payment'}</span>
                 </div>
 
                 <div className="summary-cell">
@@ -220,7 +220,7 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
                 </div>
 
                 <div className="summary-cell">
-                  <span className="summary-label">SUBMISSION TIME</span>
+                  <span className="summary-label">PAYMENT TIME</span>
                   <span className="summary-val">{formatDate(transaction.createdAt)}</span>
                 </div>
               </div>
@@ -235,30 +235,30 @@ function StatusCheck({ initialVerificationId = '', onBackToPay }) {
                   <IconAlertCircle size={24} className="text-red" />
                 </div>
                 <div>
-                  <div className="failed-meta-tag">TRANSACTION DECLINED</div>
+                  <div className="failed-meta-tag">NOT VERIFIED</div>
                   <h3>Verification Unsuccessful</h3>
                 </div>
               </div>
 
               <div className="failed-notice-box">
                 <p>
-                  This payment could not be verified against the receiver's bank statement. Common reasons include bank transaction timeout, incorrect 12-digit UTR, or credit reversal.
+                  This payment could not be matched against the bank statement. Please confirm the 12-digit UTR or retry the payment.
                 </p>
                 {transaction.notes && (
                   <div className="failed-reason-text">
-                    <strong>Receiver Note:</strong> {transaction.notes}
+                    <strong>Note:</strong> {transaction.notes}
                   </div>
                 )}
               </div>
 
               <div className="pending-summary-grid">
                 <div className="summary-cell">
-                  <span className="summary-label">VERIFICATION ID</span>
+                  <span className="summary-label">REFERENCE ID</span>
                   <span className="summary-val mono">{transaction.verificationId}</span>
                 </div>
                 <div className="summary-cell">
                   <span className="summary-label">AMOUNT</span>
-                  <span className="summary-val">₹{transaction.amount}</span>
+                  <span className="summary-val font-semibold">₹{transaction.amount}</span>
                 </div>
                 <div className="summary-cell">
                   <span className="summary-label">PAYER NAME</span>

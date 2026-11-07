@@ -359,7 +359,7 @@ function UserDashboard({ onLogout, onProfileUpdate, onPreviewPayment }) {
               <span className="merchant-handle-pill mono">@{profile.username}</span>
               <span className="merchant-status-badge">
                 <span className="pulsing-green-dot"></span>
-                Active Settlement Switch
+                Active & Ready
               </span>
             </div>
 
@@ -886,9 +886,9 @@ function UserDashboard({ onLogout, onProfileUpdate, onPreviewPayment }) {
               <div className="modal-title-col">
                 <div className="header-meta-pill">
                   <IconShieldCheck size={14} className="text-emerald" />
-                  <span>3-POINT BANK SETTLEMENT VERIFICATION</span>
+                  <span>PAYMENT VERIFICATION</span>
                 </div>
-                <h3 className="modal-title">Verify Incoming Credit</h3>
+                <h3 className="modal-title">Confirm Received Payment</h3>
               </div>
               <button type="button" className="modal-close-btn" onClick={() => setVerifyingTx(null)}>×</button>
             </div>

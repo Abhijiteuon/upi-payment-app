@@ -3,9 +3,9 @@ import {
   IconCreditCard, 
   IconSearch, 
   IconExternalLink, 
-  IconLock, 
   IconShieldCheck,
-  IconArrowRight 
+  IconArrowRight,
+  IconUser
 } from './Icons';
 
 function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activeProfile }) {
@@ -32,10 +32,13 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
       <header className="navbar">
         <div className="nav-container">
           {/* Brand Logo */}
-          <div className="nav-logo" onClick={() => handleNavClick('pay')} title="CLOAK — Credential-less Link for Online Auth & Keys">
+          <div className="nav-logo" onClick={() => handleNavClick('pay')} title="UPI Pay">
+            <div className="nav-brand-icon-box">
+              <IconShieldCheck size={18} className="text-emerald" />
+            </div>
             <div className="nav-brand-text">
-              <span className="logo-text">CLOAK</span>
-              <span className="logo-badge">AUTH & KEYS</span>
+              <span className="logo-text">UPI Pay</span>
+              <span className="logo-badge">SECURE</span>
             </div>
           </div>
 
@@ -76,7 +79,7 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
                   onClick={() => handleNavClick('admin')}
                 >
                   <span className="admin-status-dot"></span>
-                  <span>{activeProfile?.displayName ? `${activeProfile.displayName} (Dashboard)` : 'Dashboard'}</span>
+                  <span>{activeProfile?.displayName ? `${activeProfile.displayName}` : 'Dashboard'}</span>
                 </button>
                 <button 
                   className="nav-logout-btn"
@@ -91,17 +94,17 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
                 className={`desktop-nav-btn admin-portal-btn ${currentView === 'admin' ? 'active' : ''}`}
                 onClick={() => handleNavClick('admin')}
               >
-                <IconLock size={13} />
-                <span>Merchant Portal</span>
+                <IconUser size={13} />
+                <span>Merchant Account</span>
               </button>
             )}
           </nav>
 
           {/* Mobile Right Controls: Trust Pill + Hamburger */}
           <div className="mobile-nav-controls">
-            <div className="nav-trust-pill mobile-hide">
+            <div className="nav-trust-pill">
               <IconShieldCheck size={13} className="text-emerald" />
-              <span>NPCI Encrypted</span>
+              <span>Verified UPI</span>
             </div>
 
             <button 
@@ -126,10 +129,13 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
       <aside className={`nav-drawer ${isOpen ? 'open' : ''}`}>
         <div className="drawer-header">
           <div className="drawer-brand">
+            <div className="nav-brand-icon-box" style={{ width: 28, height: 28 }}>
+              <IconShieldCheck size={16} className="text-emerald" />
+            </div>
             <div>
-              <span className="logo-text">CLOAK</span>
-              <span style={{ display: 'block', fontSize: '0.62rem', color: '#94a3b8', letterSpacing: '0.04em' }}>
-                Credential-less Link for Online Auth & Keys
+              <span className="logo-text">UPI Pay</span>
+              <span style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8' }}>
+                Fast, Simple & Secure UPI Payments
               </span>
             </div>
           </div>
@@ -143,7 +149,7 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
         </div>
 
         <div className="drawer-body">
-          <div className="drawer-label">NAVIGATION</div>
+          <div className="drawer-label">MENU</div>
           <ul className="drawer-links">
             <li>
               <button 
@@ -168,6 +174,17 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
             </li>
 
             <li>
+              <button 
+                className={`drawer-link-btn ${currentView === 'admin' ? 'active' : ''}`}
+                onClick={() => handleNavClick('admin')}
+              >
+                <IconUser size={18} className="link-icon" />
+                <span>{isAdminLoggedIn ? 'My Merchant Dashboard' : 'Merchant Portal (Login / Sign Up)'}</span>
+                <IconArrowRight size={14} className="drawer-arrow" />
+              </button>
+            </li>
+
+            <li>
               <a 
                 href="https://abhijitportfolio-five.vercel.app/" 
                 target="_blank" 
@@ -175,50 +192,77 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
                 className="drawer-link-btn"
                 onClick={() => setIsOpen(false)}
               >
-                <span className="link-icon">↗</span>
-                <span>Know About the Creator</span>
-                <IconExternalLink size={14} className="drawer-arrow" />
+                <IconExternalLink size={18} className="link-icon" />
+                <span>Creator Portfolio</span>
+                <IconArrowRight size={14} className="drawer-arrow" />
               </a>
             </li>
           </ul>
 
-          <div className="drawer-divider"></div>
-
-          <div className="drawer-label">MERCHANT ACCOUNT</div>
-          <ul className="drawer-links">
-            <li>
-              <button 
-                className={`drawer-link-btn admin-link ${currentView === 'admin' ? 'active' : ''}`}
-                onClick={() => handleNavClick('admin')}
-              >
-                <IconLock size={18} className="link-icon" />
-                <span>{isAdminLoggedIn ? 'My Merchant Dashboard' : 'Merchant Portal (Sign In/Up)'}</span>
-              </button>
-            </li>
-
-            {isAdminLoggedIn && (
-              <li>
-                <button 
-                  className="drawer-link-btn drawer-logout-btn"
-                  onClick={() => {
-                    setIsOpen(false);
-                    onAdminLogout();
-                  }}
-                >
-                  <span>Sign Out</span>
-                </button>
-              </li>
-            )}
-          </ul>
+          {isAdminLoggedIn && (
+            <>
+              <div className="drawer-divider"></div>
+              <ul className="drawer-links">
+                <li>
+                  <button 
+                    className="drawer-link-btn drawer-logout-btn"
+                    onClick={() => {
+                      setIsOpen(false);
+                      onAdminLogout();
+                    }}
+                  >
+                    <span>Sign Out of Account</span>
+                  </button>
+                </li>
+              </ul>
+            </>
+          )}
         </div>
 
         <div className="drawer-footer">
           <div className="drawer-security-note">
             <IconShieldCheck size={14} className="text-emerald" />
-            <span>256-bit Encrypted • Direct ICICI UPI</span>
+            <span>Instant & Direct UPI Settlement</span>
           </div>
         </div>
       </aside>
+
+      {/* Modern Android Bottom Navigation Bar (Visible on mobile/tablet screens) */}
+      <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+        <button 
+          type="button" 
+          className={`bottom-nav-item ${currentView === 'pay' ? 'active' : ''}`}
+          onClick={() => handleNavClick('pay')}
+        >
+          <div className="bottom-nav-icon">
+            <IconCreditCard size={20} />
+          </div>
+          <span className="bottom-nav-label">Pay</span>
+        </button>
+
+        <button 
+          type="button" 
+          className={`bottom-nav-item ${currentView === 'status' ? 'active' : ''}`}
+          onClick={() => handleNavClick('status')}
+        >
+          <div className="bottom-nav-icon">
+            <IconSearch size={20} />
+          </div>
+          <span className="bottom-nav-label">Status</span>
+        </button>
+
+        <button 
+          type="button" 
+          className={`bottom-nav-item ${currentView === 'admin' ? 'active' : ''}`}
+          onClick={() => handleNavClick('admin')}
+        >
+          <div className="bottom-nav-icon">
+            <IconUser size={20} />
+            {isAdminLoggedIn && <span className="bottom-nav-dot"></span>}
+          </div>
+          <span className="bottom-nav-label">{isAdminLoggedIn ? 'Dashboard' : 'Account'}</span>
+        </button>
+      </nav>
     </>
   );
 }

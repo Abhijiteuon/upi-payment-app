@@ -88,12 +88,12 @@ function AuthPortal({ onLoginSuccess, onCancel }) {
           <IconShieldCheck size={28} className="lock-icon-svg text-emerald" />
         </div>
         <h1 className="main-title">
-          {mode === 'login' ? 'Merchant Portal' : 'Create Merchant Account'}
+          {mode === 'login' ? 'Merchant Account' : 'Create Merchant Account'}
         </h1>
         <p className="sub-title">
           {mode === 'login' 
-            ? 'Access your personalized settlement dashboard, UPI payment links, and ledger' 
-            : 'Accept direct UPI payments into your own bank account with zero MDR'}
+            ? 'Sign in to manage your UPI payment links and transactions' 
+            : 'Accept direct UPI payments into your bank account with zero fees'}
         </p>
       </div>
 

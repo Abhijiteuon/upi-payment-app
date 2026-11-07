@@ -36,26 +36,25 @@ function PaymentReceipt({ transaction, onBack, isAdminView = false }) {
 
   const verificationUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}${window.location.pathname}?verify=${transaction.verificationId}`
-    : `https://cloak.pay/?verify=${transaction.verificationId}`;
+    : `https://upipay.internal/?verify=${transaction.verificationId}`;
 
   const handleCopyDetails = () => {
-    const payeeName = transaction.payeeDisplayName || 'Abhijit Kumar';
-    const payeeVpa = transaction.payeeUpi || 'euonabhijit@okicici';
+    const payeeName = transaction.payeeDisplayName || 'Merchant';
+    const payeeVpa = transaction.payeeUpi || 'merchant@upi';
 
     const text = `
 === OFFICIAL PAYMENT RECEIPT ===
 Payee: ${payeeName} (${isMasked ? maskVPA(payeeVpa) : payeeVpa})
-Verification ID: ${transaction.verificationId}
-Status: VERIFIED & SETTLED
+Reference ID: ${transaction.verificationId}
+Status: VERIFIED & COMPLETED
 Amount: ₹${Number(transaction.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
 Payer Name: ${transaction.name}
 Email: ${isMasked ? maskEmail(transaction.email) : transaction.email}
 Phone: ${isMasked ? maskPhone(transaction.phone) : transaction.phone}
-Purpose: ${transaction.purpose}
+Purpose / Note: ${transaction.purpose || 'Payment'}
 Date: ${new Date(transaction.createdAt).toLocaleString()}
-${transaction.utr ? `UTR: ${transaction.utr}` : ''}
+${transaction.utr ? `Bank UTR: ${transaction.utr}` : ''}
 Verified On: ${transaction.verifiedAt ? new Date(transaction.verifiedAt).toLocaleString() : 'N/A'}
-Security Fingerprint: ${receiptFingerprint}
 Verify Online: ${verificationUrl}
 ================================
     `.trim();
@@ -86,17 +85,17 @@ Verify Online: ${verificationUrl}
     <div className="receipt-view-wrapper fade-in">
       <div className="receipt-card-container" id="printable-receipt">
         
-        {/* Receipt Header with Brand & Verified Status */}
+        {/* Receipt Header */}
         <div className="receipt-header-row">
           <div className="receipt-brand-col">
             <div className="receipt-brand-badge">
               <div>
-                <span className="brand-name">CLOAK</span>
-                <span className="brand-product">CREDENTIAL-LESS LINK FOR ONLINE AUTH & KEYS</span>
+                <span className="brand-name">UPI Pay</span>
+                <span className="brand-product">OFFICIAL PAYMENT RECEIPT</span>
               </div>
             </div>
             <div className="receipt-voucher-number">
-              OFFICIAL RECEIPT · {transaction.verificationId}
+              Ref: {transaction.verificationId}
             </div>
           </div>
 
@@ -104,17 +103,17 @@ Verify Online: ${verificationUrl}
             <div className="receipt-verified-badge">
               <span className="pulsing-green-dot"></span>
               <IconShieldCheck size={14} className="text-emerald" />
-              <span>VERIFIED & SETTLED</span>
+              <span>VERIFIED & PAID</span>
             </div>
             <div className="receipt-issue-date">
-              Settled: {formatDate(transaction.verifiedAt)}
+              {formatDate(transaction.verifiedAt || transaction.createdAt)}
             </div>
           </div>
         </div>
 
         {/* Big Amount Display */}
         <div className="receipt-amount-banner">
-          <div className="amount-caption">TOTAL AMOUNT SETTLED</div>
+          <div className="amount-caption">TOTAL AMOUNT PAID</div>
           <div className="amount-value-display">
             <span className="amount-currency">₹</span>
             <span className="amount-number">
@@ -122,7 +121,7 @@ Verify Online: ${verificationUrl}
             </span>
           </div>
           <div className="amount-words-meta">
-            Payment Mode: Direct UPI (Instant Bank Settlement)
+            Payment Mode: Direct UPI Transfer
           </div>
         </div>
 
@@ -133,7 +132,7 @@ Verify Online: ${verificationUrl}
           <div className="ticket-punch right"></div>
         </div>
 
-        {/* Financial Specification Grid */}
+        {/* Details Grid */}
         <div className="receipt-details-table">
           <div className="receipt-detail-cell">
             <span className="cell-label">PAYER NAME</span>
@@ -141,22 +140,8 @@ Verify Online: ${verificationUrl}
           </div>
 
           <div className="receipt-detail-cell">
-            <span className="cell-label">PAYMENT PURPOSE</span>
-            <span className="cell-value">{transaction.purpose}</span>
-          </div>
-
-          <div className="receipt-detail-cell">
-            <span className="cell-label">PAYER CONTACT</span>
-            <span className="cell-value mono">
-              {isMasked ? maskPhone(transaction.phone) : transaction.phone}
-            </span>
-          </div>
-
-          <div className="receipt-detail-cell">
-            <span className="cell-label">PAYER EMAIL</span>
-            <span className="cell-value">
-              {isMasked ? maskEmail(transaction.email) : transaction.email}
-            </span>
+            <span className="cell-label">NOTE / PURPOSE</span>
+            <span className="cell-value">{transaction.purpose || 'Payment'}</span>
           </div>
 
           <div className="receipt-detail-cell">
@@ -167,20 +152,22 @@ Verify Online: ${verificationUrl}
           </div>
 
           <div className="receipt-detail-cell">
-            <span className="cell-label">RECEIVER VPA</span>
+            <span className="cell-label">RECEIVER UPI</span>
             <span className="cell-value mono">
-              {isMasked ? maskVPA(transaction.payeeUpi || 'euonabhijit@okicici') : (transaction.payeeUpi || 'euonabhijit@okicici')}
+              {isMasked ? maskVPA(transaction.payeeUpi || 'merchant@upi') : (transaction.payeeUpi || 'merchant@upi')}
             </span>
           </div>
 
           <div className="receipt-detail-cell">
-            <span className="cell-label">INITIATED ON</span>
+            <span className="cell-label">DATE & TIME</span>
             <span className="cell-value">{formatDate(transaction.createdAt)}</span>
           </div>
 
           <div className="receipt-detail-cell">
-            <span className="cell-label">ENTITY TYPE</span>
-            <span className="cell-value">{transaction.source || 'Individual'}</span>
+            <span className="cell-label">CONTACT INFO</span>
+            <span className="cell-value mono">
+              {isMasked ? maskPhone(transaction.phone) : transaction.phone}
+            </span>
           </div>
         </div>
 
@@ -189,13 +176,13 @@ Verify Online: ${verificationUrl}
           <div className="seal-meta-col">
             <div className="seal-title">
               <IconLock size={14} className="text-emerald" />
-              <span>CLOAK CRYPTOGRAPHIC AUDIT SEAL</span>
+              <span>DIGITAL PAYMENT SEAL</span>
             </div>
             <div className="seal-fingerprint mono">
               {receiptFingerprint}
             </div>
             <div className="seal-description">
-              Tamper-evident hash generated from Verification ID, settled amount, and banking timestamp via CLOAK protocol. Scan QR to authenticate.
+              Tamper-evident verification hash. Scan QR code to verify this receipt online.
             </div>
           </div>
 
@@ -212,14 +199,14 @@ Verify Online: ${verificationUrl}
           </div>
         </div>
 
-        {/* Institutional Sign-off Footer */}
+        {/* Receipt Sign-off Footer */}
         <div className="receipt-signoff-footer">
           <div className="signoff-signature-block">
-            <div className="signature-line">Abhijit Kumar</div>
-            <div className="signature-caption">Authorized Receiver & Engineer</div>
+            <div className="signature-line">{transaction.payeeDisplayName || 'Authorized Merchant'}</div>
+            <div className="signature-caption">Receiver Confirmation</div>
           </div>
           <div className="signoff-legal">
-            This digital receipt confirms the electronic credit receipt to the receiver's ICICI Bank account via NPCI Unified Payments Interface (UPI).
+            This digital receipt confirms the electronic credit receipt to the receiver via NPCI Unified Payments Interface (UPI).
           </div>
         </div>
       </div>
@@ -228,7 +215,7 @@ Verify Online: ${verificationUrl}
       <div className="receipt-toolbar no-print">
         <button onClick={handlePrint} className="primary-action-btn toolbar-btn">
           <IconPrinter size={16} />
-          <span>Print / Save PDF</span>
+          <span>Save PDF / Print</span>
         </button>
 
         <button 
@@ -237,7 +224,7 @@ Verify Online: ${verificationUrl}
           title="Toggle privacy masking on contact details"
         >
           {isMasked ? <IconEye size={16} /> : <IconEyeOff size={16} />}
-          <span>{isMasked ? 'Unmask Details' : 'Mask Details'}</span>
+          <span>{isMasked ? 'Show Contact' : 'Hide Contact'}</span>
         </button>
 
         <button onClick={handleCopyDetails} className="secondary-action-btn toolbar-btn">
@@ -248,7 +235,7 @@ Verify Online: ${verificationUrl}
         {onBack && (
           <button onClick={onBack} className="ghost-back-btn toolbar-back-btn">
             <IconArrowLeft size={16} />
-            <span>Back to Status Search</span>
+            <span>Back to Status</span>
           </button>
         )}
       </div>

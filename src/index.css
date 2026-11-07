@@ -3180,3 +3180,424 @@ body {
 .ghost-toggle-switch input:checked + .toggle-slider:before {
   transform: translateX(20px);
 }
+
+
+/* ==========================================================================
+   USER-FRIENDLY & ANDROID-OPTIMIZED STYLES
+   ========================================================================== */
+
+/* Fast Guest Mode & Verified Payee */
+.guest-mode-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-md);
+  margin-bottom: 0.75rem;
+}
+
+.guest-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.guest-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.guest-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.guest-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.payee-verified-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.payee-avatar .payee-initial {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+/* Android Pay Mode Switcher & Buttons */
+.pay-mode-switcher {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-medium);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  margin: 1.25rem 0 1.5rem;
+  gap: 4px;
+}
+
+.pay-mode-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 44px;
+}
+
+.pay-mode-tab.active {
+  background: var(--bg-card-elevated);
+  color: var(--text-main);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-subtle);
+}
+
+.android-app-pay-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.app-pay-intro {
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+}
+
+.app-pay-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--brand-primary);
+  background: rgba(99, 102, 241, 0.15);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.35rem;
+}
+
+.app-pay-text {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.android-primary-pay-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  padding: 1rem 1.4rem;
+  border-radius: var(--radius-md);
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+  transition: all 0.2s ease;
+  min-height: 52px;
+}
+
+.android-primary-pay-btn:active {
+  transform: scale(0.98);
+}
+
+.android-primary-pay-btn:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.45);
+}
+
+.upi-apps-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.upi-app-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.85rem;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.88rem;
+  transition: all 0.18s ease;
+  border: 1px solid var(--border-medium);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+  min-height: 48px;
+}
+
+.upi-app-button:active {
+  transform: scale(0.97);
+}
+
+.upi-app-button.gpay-btn:hover, .upi-app-button.gpay-btn:focus {
+  background: rgba(66, 133, 244, 0.12);
+  border-color: rgba(66, 133, 244, 0.4);
+  color: #60a5fa;
+}
+
+.upi-app-button.phonepe-btn:hover, .upi-app-button.phonepe-btn:focus {
+  background: rgba(147, 51, 234, 0.12);
+  border-color: rgba(147, 51, 234, 0.4);
+  color: #c084fc;
+}
+
+.upi-app-button.paytm-btn:hover, .upi-app-button.paytm-btn:focus {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(14, 165, 233, 0.4);
+  color: #38bdf8;
+}
+
+.upi-app-button.bhim-btn:hover, .upi-app-button.bhim-btn:focus {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.4);
+  color: #fb923c;
+}
+
+.manual-upi-copy-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border-medium);
+  border-radius: var(--radius-sm);
+}
+
+.manual-upi-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.manual-upi-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.manual-upi-val {
+  font-size: 0.88rem;
+  color: var(--color-emerald);
+  font-weight: 600;
+}
+
+.qr-instruction-header {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+/* Step 3 Success Display */
+.status-success-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+  margin-bottom: 1.25rem;
+  animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.simple-summary-card {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.summary-row strong {
+  color: var(--text-main);
+}
+
+/* Persistent Bottom Navigation for Android & Mobile Phones */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(13, 17, 26, 0.94);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border-medium);
+    padding: 0.5rem 1rem calc(0.5rem + env(safe-area-inset-bottom));
+    z-index: 1000;
+    justify-content: space-around;
+    align-items: center;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.35rem 1.25rem;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    min-width: 64px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bottom-nav-item:active {
+    transform: scale(0.92);
+  }
+
+  .bottom-nav-item.active {
+    color: var(--brand-primary);
+  }
+
+  .bottom-nav-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+  }
+
+  .bottom-nav-dot {
+    position: absolute;
+    top: -2px;
+    right: -3px;
+    width: 7px;
+    height: 7px;
+    background: var(--color-emerald);
+    border-radius: 50%;
+  }
+
+  .bottom-nav-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-top: 0.2rem;
+  }
+
+  .bottom-nav-item.active .bottom-nav-label {
+    color: var(--text-main);
+  }
+
+  /* Safe container bottom spacing so bottom nav never covers content */
+  .container {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)) !important;
+    margin-top: 1.25rem !important;
+  }
+}
+
+/* Touch Targets & Android Mobile Polish */
+@media (max-width: 600px) {
+  body {
+    font-size: 15px;
+  }
+
+  .container {
+    padding: 0 0.85rem;
+  }
+
+  .glass-card {
+    padding: 1.25rem 1rem !important;
+    border-radius: 20px !important;
+  }
+
+  .main-title {
+    font-size: 1.45rem !important;
+  }
+
+  .amount-input {
+    font-size: 1.9rem !important;
+  }
+
+  .quick-amount-chip {
+    padding: 0.45rem 0.85rem !important;
+    font-size: 0.82rem !important;
+  }
+
+  .primary-action-btn, .secondary-action-btn {
+    min-height: 50px !important;
+    font-size: 0.98rem !important;
+    border-radius: 14px !important;
+  }
+
+  .form-control {
+    font-size: 16px !important; /* Prevents auto-zoom on mobile inputs */
+    padding: 0.85rem !important;
+    border-radius: 12px !important;
+  }
+
+  .stepper-bar {
+    margin-bottom: 1.25rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .upi-apps-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .payee-profile-banner {
+    padding: 0.85rem 1rem !important;
+    gap: 0.75rem !important;
+  }
+}
