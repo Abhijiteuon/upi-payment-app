@@ -673,8 +673,12 @@ export const logoutAdmin = async () => {
   } catch (err) {
     console.warn('Sign out notice:', err);
   }
-  sessionStorage.removeItem(ADMIN_SESSION_KEY);
-  sessionStorage.removeItem('upi_admin_name');
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    sessionStorage.removeItem('upi_admin_name');
+    sessionStorage.removeItem('cloak_active_profile');
+    sessionStorage.removeItem('upi_session_timestamp');
+  }
 };
 
 /**
@@ -690,8 +694,10 @@ export const getCurrentAdminUser = async () => {
 };
 
 export const setAdminSession = (adminProfile) => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return;
   if (adminProfile) {
     sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+    sessionStorage.setItem('upi_session_timestamp', Date.now().toString());
     const displayName = typeof adminProfile === 'object' && adminProfile.email 
       ? adminProfile.email 
       : (typeof adminProfile === 'string' ? adminProfile : 'Admin');
@@ -699,13 +705,34 @@ export const setAdminSession = (adminProfile) => {
   } else {
     sessionStorage.removeItem(ADMIN_SESSION_KEY);
     sessionStorage.removeItem('upi_admin_name');
+    sessionStorage.removeItem('cloak_active_profile');
+    sessionStorage.removeItem('upi_session_timestamp');
   }
 };
 
 export const getAdminName = () => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return 'Admin';
   return sessionStorage.getItem('upi_admin_name') || 'Admin';
 };
 
 export const getAdminSession = () => {
-  return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true';
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return false;
+    const isAuth = sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true';
+    if (!isAuth) return false;
+
+    // Check session timestamp
+    const ts = sessionStorage.getItem('upi_session_timestamp');
+    if (ts) {
+      const elapsed = Date.now() - parseInt(ts, 10);
+      // Auto-expire after 2 hours without refresh
+      if (elapsed > 2 * 60 * 60 * 1000) {
+        logoutAdmin();
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
 };

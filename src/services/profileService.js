@@ -326,17 +326,23 @@ export const getPublicProfileByUsername = async (rawUsername) => {
  * Active session helpers
  */
 export const setActiveProfile = (profile) => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return;
   if (!profile) {
     sessionStorage.removeItem(ACTIVE_PROFILE_KEY);
+    sessionStorage.removeItem('upi_admin_session');
+    sessionStorage.removeItem('upi_admin_name');
+    sessionStorage.removeItem('upi_session_timestamp');
   } else {
     sessionStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(profile));
     sessionStorage.setItem('upi_admin_session', 'true');
+    sessionStorage.setItem('upi_session_timestamp', Date.now().toString());
     sessionStorage.setItem('upi_admin_name', profile.displayName || profile.username);
   }
 };
 
 export const getActiveProfile = () => {
   try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return null;
     const raw = sessionStorage.getItem(ACTIVE_PROFILE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
@@ -350,9 +356,12 @@ export const logoutMerchantSession = async () => {
   } catch (err) {
     console.warn('Sign out notice:', err);
   }
-  sessionStorage.removeItem(ACTIVE_PROFILE_KEY);
-  sessionStorage.removeItem('upi_admin_session');
-  sessionStorage.removeItem('upi_admin_name');
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    sessionStorage.removeItem(ACTIVE_PROFILE_KEY);
+    sessionStorage.removeItem('upi_admin_session');
+    sessionStorage.removeItem('upi_admin_name');
+    sessionStorage.removeItem('upi_session_timestamp');
+  }
 };
 
 /**

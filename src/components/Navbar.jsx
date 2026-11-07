@@ -283,7 +283,6 @@ function Navbar({ currentView, onNavigate, isAdminLoggedIn, onAdminLogout, activ
         >
           <div className="bottom-nav-icon">
             <IconUser size={20} />
-            {isAdminLoggedIn && <span className="bottom-nav-dot"></span>}
           </div>
           <span className="bottom-nav-label">{isAdminLoggedIn ? 'Dashboard' : 'Sign In'}</span>
         </button>

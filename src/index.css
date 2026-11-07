@@ -3570,6 +3570,131 @@ body {
     font-size: 1.9rem !important;
   }
 
+  /* Exclude small inputs in dashboard from the huge payment amount font */
+  .custom-link-inputs .amount-input,
+  .custom-link-inputs .small-input {
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    height: 100% !important;
+    width: 100% !important;
+  }
+
+  .custom-link-inputs .currency-symbol {
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    color: var(--brand-primary) !important;
+  }
+
+  .custom-link-inputs .small-box {
+    height: 46px !important;
+    padding: 0 0.75rem !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid var(--border-medium) !important;
+    border-radius: var(--radius-sm) !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .custom-link-inputs .small-control {
+    height: 46px !important;
+    font-size: 0.88rem !important;
+    padding: 0 0.75rem !important;
+    border-radius: var(--radius-sm) !important;
+  }
+
+  /* Android 2x2 Grid for Share Center Action Buttons (Eliminates cut-off buttons) */
+  .share-actions-row {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
+
+  .share-action-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0.65rem 0.5rem !important;
+    font-size: 0.78rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.35rem !important;
+  }
+
+  .share-action-btn span {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  /* Merchant Header Card Mobile Optimization */
+  .merchant-profile-header {
+    padding: 1.15rem !important;
+    border-radius: 18px !important;
+  }
+
+  .merchant-identity-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.75rem !important;
+  }
+
+  .merchant-name-line {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+  }
+
+  .merchant-display-name {
+    font-size: 1.25rem !important;
+  }
+
+  .merchant-vpa-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.4rem 0.6rem !important;
+    margin-top: 0.35rem !important;
+    width: 100% !important;
+  }
+
+  .vpa-field-value {
+    font-size: 0.85rem !important;
+    word-break: break-all !important;
+  }
+
+  .merchant-header-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+    margin-top: 0.5rem !important;
+  }
+
+  .refresh-btn-outline,
+  .logout-btn-outline {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.6rem 0.8rem !important;
+    font-size: 0.82rem !important;
+  }
+
+  .share-link-box {
+    padding: 0.65rem 0.85rem !important;
+  }
+
+  .share-url-text {
+    font-size: 0.78rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
+  }
+
   .quick-amount-chip {
     padding: 0.45rem 0.85rem !important;
     font-size: 0.82rem !important;
@@ -3694,11 +3819,11 @@ button, a, .quick-amount-chip, .bottom-nav-item, .pay-mode-tab {
 
   /* Material 3 Bottom Nav Pill Indicator */
   .bottom-nav-item.active .bottom-nav-icon {
-    background: rgba(99, 102, 241, 0.2);
-    padding: 4px 18px;
-    border-radius: 20px;
+    background: rgba(99, 102, 241, 0.22);
+    padding: 4px 16px;
+    border-radius: 16px;
     color: #818cf8;
-    box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+    box-shadow: none;
   }
 
   .bottom-nav-item.active .bottom-nav-label {

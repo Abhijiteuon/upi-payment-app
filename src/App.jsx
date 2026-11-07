@@ -165,25 +165,43 @@ function App() {
     }
   }, [syncPayee]);
 
-  // Auto-logout: Inactivity timer (30 minutes) when merchant is logged in
+  // Auto-logout: Inactivity timer (15 minutes) when merchant is logged in
   useEffect(() => {
     if (!isAdminLoggedIn) return;
 
     let timeoutId;
     const resetTimer = () => {
       clearTimeout(timeoutId);
+      sessionStorage.setItem('upi_session_timestamp', Date.now().toString());
       timeoutId = setTimeout(() => {
         handleAdminLogout();
-      }, 30 * 60 * 1000); // 30 mins
+      }, 15 * 60 * 1000); // 15 mins idle
     };
 
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
     events.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
     resetTimer();
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const lastActive = sessionStorage.getItem('upi_session_timestamp');
+        if (lastActive) {
+          const diff = Date.now() - parseInt(lastActive, 10);
+          if (diff > 15 * 60 * 1000) {
+            handleAdminLogout();
+          } else {
+            sessionStorage.setItem('upi_session_timestamp', Date.now().toString());
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       clearTimeout(timeoutId);
       events.forEach(evt => window.removeEventListener(evt, resetTimer));
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isAdminLoggedIn]);
 

@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = 'https://wgmvsifckxazgdlbvwhb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndnbXZzaWZja3hhemdkbGJ2d2hiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1ODg3MjksImV4cCI6MjEwODE2NDcyOX0.E1Uba0W0KN7_gDFsyXrUwP95cWbpsEMfr-cxwo_vasI';
 
+export const AUTH_CLEAN_VERSION = 'upi_app_clean_v7_reset';
+
 // Safe sessionStorage adapter: auto-terminates session when user closes browser or shuts down system
 const customSessionStorage = {
   getItem: (key) => {
@@ -21,16 +23,28 @@ const customSessionStorage = {
   }
 };
 
-// Purge any older tokens saved to persistent localStorage from disk
-if (typeof window !== 'undefined' && window.localStorage) {
+// Force a clean one-time purge of all legacy sessions so the user starts at the Login Page
+if (typeof window !== 'undefined') {
   try {
-    Object.keys(localStorage).forEach((k) => {
-      if (k.startsWith('sb-') || k.includes('auth-token') || k.includes('cloak_active')) {
-        localStorage.removeItem(k);
+    const activeVersion = window.localStorage.getItem('upi_auth_version');
+    if (activeVersion !== AUTH_CLEAN_VERSION) {
+      // 1. Clear any persistent tokens in localStorage
+      if (window.localStorage) {
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith('sb-') || k.includes('auth') || k.includes('cloak') || k.includes('upi_admin')) {
+            localStorage.removeItem(k);
+          }
+        });
       }
-    });
-  } catch {
-    // ignore
+      // 2. Clear lingering mobile tab sessionStorage
+      if (window.sessionStorage) {
+        window.sessionStorage.clear();
+      }
+      // 3. Mark version as upgraded
+      window.localStorage.setItem('upi_auth_version', AUTH_CLEAN_VERSION);
+    }
+  } catch (err) {
+    console.warn('Storage purge error:', err);
   }
 }
 
