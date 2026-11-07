@@ -3601,3 +3601,295 @@ body {
     gap: 0.75rem !important;
   }
 }
+
+
+/* ==========================================================================
+   NATIVE ANDROID UI & MATERIAL DESIGN ENHANCEMENTS
+   ========================================================================== */
+
+/* Global Android Touch & Viewport Polish */
+html, body {
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.app-root {
+  min-height: 100dvh;
+}
+
+button, a, .quick-amount-chip, .bottom-nav-item, .pay-mode-tab {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Visibility Rules: Desktop Table vs Android Mobile Cards */
+.mobile-only-cards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .desktop-only-table {
+    display: none !important;
+  }
+
+  .mobile-only-cards {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin-top: 1rem;
+  }
+
+  /* Android 2x2 Financial Metrics Grid */
+  .telemetry-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.65rem !important;
+    margin-bottom: 1.25rem !important;
+  }
+
+  .telemetry-card {
+    padding: 0.85rem !important;
+    border-radius: 14px !important;
+  }
+
+  .telemetry-val {
+    font-size: 1.25rem !important;
+  }
+
+  .telemetry-sub {
+    font-size: 0.7rem !important;
+  }
+
+  .share-center-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.85rem !important;
+  }
+
+  .merchant-identity-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.85rem !important;
+  }
+
+  .merchant-header-actions {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  .ledger-controls-group {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.65rem !important;
+  }
+
+  .ledger-search-box {
+    width: 100% !important;
+  }
+
+  .ledger-filter-tabs {
+    overflow-x: auto !important;
+    padding-bottom: 4px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Material 3 Bottom Nav Pill Indicator */
+  .bottom-nav-item.active .bottom-nav-icon {
+    background: rgba(99, 102, 241, 0.2);
+    padding: 4px 18px;
+    border-radius: 20px;
+    color: #818cf8;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+  }
+
+  .bottom-nav-item.active .bottom-nav-label {
+    color: #fff;
+    font-weight: 700;
+  }
+}
+
+/* Android Native Transaction Cards */
+.mobile-tx-card {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border-medium);
+  border-radius: 16px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.mobile-tx-card:active {
+  transform: scale(0.99);
+}
+
+.mobile-tx-card.status-successful {
+  border-left: 4px solid var(--color-emerald);
+}
+
+.mobile-tx-card.status-pending {
+  border-left: 4px solid var(--color-amber);
+}
+
+.mobile-tx-card.status-failed {
+  border-left: 4px solid var(--color-rose);
+}
+
+.mobile-tx-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.mobile-tx-user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.mobile-tx-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: var(--brand-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.mobile-tx-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.mobile-tx-time {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.mobile-tx-amount-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.mobile-tx-amount {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-emerald);
+}
+
+.mobile-tx-body {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.mobile-tx-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.mobile-tx-meta-row .label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.mobile-tx-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+}
+
+.mobile-tx-btn {
+  flex: 1;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid var(--border-medium);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-tx-btn:active {
+  transform: scale(0.96);
+}
+
+.mobile-tx-btn.verify-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.mobile-tx-btn.secondary-btn {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mobile-tx-btn.reject-btn {
+  background: rgba(244, 63, 94, 0.1);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: var(--color-rose);
+  flex: 0 0 auto;
+  padding: 0.45rem 0.75rem;
+}
+
+.mobile-tx-btn.delete-btn {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  padding: 0.45rem 0.6rem;
+}
+
+/* Material Design Android Bottom Sheet for Modals */
+@media (max-width: 600px) {
+  .modal-backdrop {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .modal-dialog-box {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 88dvh !important;
+    border-radius: 28px 28px 0 0 !important;
+    padding: 1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom)) !important;
+    animation: bottomSheetSlideUp 0.28s cubic-bezier(0.1, 0.9, 0.2, 1) !important;
+    border-bottom: none !important;
+  }
+
+  @keyframes bottomSheetSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+}

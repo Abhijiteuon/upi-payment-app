@@ -638,8 +638,8 @@ function UserDashboard({ onLogout, onProfileUpdate, onPreviewPayment }) {
           </div>
         </div>
 
-        {/* Transactions Table */}
-        <div className="ledger-table-container">
+        {/* Transactions Table (Desktop) */}
+        <div className="ledger-table-container desktop-only-table">
           <table className="ledger-table">
             <thead>
               <tr>
@@ -762,7 +762,7 @@ function UserDashboard({ onLogout, onProfileUpdate, onPreviewPayment }) {
                             type="button" 
                             className="btn-action-verify"
                             onClick={() => handleInitiateVerification(tx)}
-                            title="Perform 3-Point Bank Cross-Check & Approve"
+                            title="Verify & Settle"
                           >
                             <IconCheck size={13} />
                             <span>Verify</span>
@@ -805,6 +805,109 @@ function UserDashboard({ onLogout, onProfileUpdate, onPreviewPayment }) {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Android / Mobile View: Native Transaction Cards */}
+        <div className="mobile-only-cards">
+          {filteredTransactions.length === 0 ? (
+            <div className="empty-ledger-state mobile-empty-state">
+              <IconShieldCheck size={36} className="empty-icon text-muted" />
+              <p className="empty-title">No transactions located</p>
+              <span className="empty-sub">
+                Share your payment link to start receiving payments.
+              </span>
+              <button 
+                type="button" 
+                className="share-action-btn primary mt-3"
+                onClick={handleCopyPermanentLink}
+              >
+                <IconCopy size={14} />
+                <span>Copy Your Payment Link</span>
+              </button>
+            </div>
+          ) : (
+            filteredTransactions.map((tx) => (
+              <div key={tx.verificationId || tx.id} className={`mobile-tx-card status-${tx.status}`}>
+                <div className="mobile-tx-header">
+                  <div className="mobile-tx-user-info">
+                    <div className="mobile-tx-avatar">
+                      {(tx.name || 'G').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="mobile-tx-name">{tx.name || 'Guest Payer'}</div>
+                      <div className="mobile-tx-time">
+                        {new Date(tx.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}, {new Date(tx.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mobile-tx-amount-col text-right">
+                    <div className="mobile-tx-amount mono">
+                      +₹{Number(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </div>
+                    <span className={`badge-status badge-${tx.status === 'successful' ? 'success' : tx.status === 'failed' ? 'failed' : 'pending'}`}>
+                      <span className={`dot ${tx.status === 'pending' ? 'pulse' : ''}`}></span>
+                      {tx.status === 'successful' ? 'Verified' : tx.status === 'failed' ? 'Rejected' : 'Pending'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mobile-tx-body">
+                  <div className="mobile-tx-meta-row">
+                    <span className="label">Ref ID:</span>
+                    <span className="mono">{tx.verificationId}</span>
+                  </div>
+                  {tx.utr && (
+                    <div className="mobile-tx-meta-row">
+                      <span className="label">UTR:</span>
+                      <span className="mono text-emerald font-semibold">{tx.utr}</span>
+                    </div>
+                  )}
+                  {tx.purpose && (
+                    <div className="mobile-tx-meta-row">
+                      <span className="label">Note:</span>
+                      <span>{tx.purpose}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mobile-tx-actions-row">
+                  {tx.status === 'pending' && (
+                    <button 
+                      type="button" 
+                      className="mobile-tx-btn verify-btn"
+                      onClick={() => handleInitiateVerification(tx)}
+                    >
+                      <IconCheck size={14} />
+                      <span>Verify</span>
+                    </button>
+                  )}
+                  <button 
+                    type="button" 
+                    className="mobile-tx-btn secondary-btn"
+                    onClick={() => setInspectingTx(tx)}
+                  >
+                    <span>Receipt</span>
+                  </button>
+                  {tx.status === 'pending' && (
+                    <button 
+                      type="button" 
+                      className="mobile-tx-btn reject-btn"
+                      onClick={() => handleRejectTransaction(tx)}
+                    >
+                      <span>Reject</span>
+                    </button>
+                  )}
+                  <button 
+                    type="button" 
+                    className="mobile-tx-btn delete-btn"
+                    onClick={() => handleDeleteTransaction(tx.verificationId)}
+                  >
+                    <IconTrash size={14} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
